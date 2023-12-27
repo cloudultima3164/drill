@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
@@ -27,6 +29,7 @@ static USER_AGENT: &str = "drill";
 #[allow(dead_code)]
 pub struct Request {
   name: String,
+  base: Option<String>,
   url: String,
   time: f64,
   method: String,
@@ -51,6 +54,7 @@ impl Request {
 
   pub fn new(item: &Yaml, with_item: Option<Yaml>, index: Option<u32>) -> Request {
     let name = extract(item, "name");
+    let base = extract_optional(&item["request"], "base");
     let url = extract(&item["request"], "url");
     let assign = extract_optional(item, "assign");
 
@@ -81,6 +85,7 @@ impl Request {
 
     Request {
       name,
+      base,
       url,
       time: 0.0,
       method,
@@ -101,41 +106,29 @@ impl Request {
   }
 
   async fn send_request(&self, context: &mut Context, pool: &Pool, config: &Config) -> (Option<Response>, f64) {
-    let mut uninterpolator = None;
-
-    // Resolve the name
-    let interpolated_name = if self.name.contains('{') {
-      uninterpolator.get_or_insert(interpolator::Interpolator::new(context)).resolve(&self.name, !config.relaxed_interpolations)
-    } else {
-      self.name.clone()
-    };
-
-    // Resolve the url
-    let interpolated_url = if self.url.contains('{') {
-      uninterpolator.get_or_insert(interpolator::Interpolator::new(context)).resolve(&self.url, !config.relaxed_interpolations)
-    } else {
-      self.url.clone()
-    };
+    let interpolator = interpolator::Interpolator::new(context);
 
     // Resolve relative urls
-    let interpolated_base_url = if &interpolated_url[..1] == "/" {
-      match context.get("base") {
+    let interpolated_base_url = if let Some(base_url) = self.base.clone() {
+      match context.get("urls") {
         Some(value) => {
-          if let Some(vs) = value.as_str() {
-            format!("{vs}{interpolated_url}")
+          if let Some(url_map) = value.as_object() {
+            let mut joined_url = PathBuf::from_str(url_map.get(&base_url).ok_or_else(|| format!("No such key in \"urls\" object: {}", base_url)).unwrap().as_str().unwrap()).unwrap();
+            joined_url.push(self.url.clone());
+            interpolator.resolve(joined_url.to_str().unwrap(), false)
           } else {
-            panic!("{} Wrong type 'base' variable!", "WARNING!".yellow().bold());
+            panic!("{} Wrong type for 'urls' variable.", "ERROR:".yellow().bold());
           }
         }
         _ => {
-          panic!("{} Unknown 'base' variable!", "WARNING!".yellow().bold());
+          panic!("{} Request '{}' references a non-existent base url named '{}'", "ERROR:".yellow().bold(), self.name.green(), base_url.magenta().bold());
         }
       }
     } else {
-      interpolated_url
+      interpolator.resolve(&self.url, false)
     };
 
-    let url = Url::parse(&interpolated_base_url).expect("Invalid url!");
+    let url = Url::parse(&interpolated_base_url).expect("Invalid url");
     let domain = format!("{}://{}:{}", url.scheme(), url.host_str().unwrap(), url.port().unwrap_or(0)); // Unique domain key for keep-alive
 
     let interpolated_body;
@@ -157,7 +150,7 @@ impl Request {
       let client = pool2.entry(domain).or_insert_with(|| ClientBuilder::default().danger_accept_invalid_certs(config.no_check_certificate).build().unwrap());
 
       let request = if let Some(body) = self.body.as_ref() {
-        interpolated_body = uninterpolator.get_or_insert(interpolator::Interpolator::new(context)).resolve(body, !config.relaxed_interpolations);
+        interpolated_body = interpolator.resolve(body, !config.relaxed_interpolations);
 
         client.request(method, interpolated_base_url.as_str()).body(interpolated_body)
       } else {
@@ -180,7 +173,7 @@ impl Request {
 
     // Resolve headers
     for (key, val) in self.headers.iter() {
-      let interpolated_header = uninterpolator.get_or_insert(interpolator::Interpolator::new(context)).resolve(val, !config.relaxed_interpolations);
+      let interpolated_header = interpolator.resolve(val, !config.relaxed_interpolations);
       headers.insert(HeaderName::from_bytes(key.as_bytes()).unwrap(), HeaderValue::from_str(&interpolated_header).unwrap());
     }
 
@@ -213,7 +206,7 @@ impl Request {
             status.to_string().yellow()
           };
 
-          println!("{:width$} {} {} {}", interpolated_name.green(), interpolated_base_url.blue().bold(), status_text, Request::format_time(duration_ms, config.nanosec).cyan(), width = 25);
+          println!("{:width$} {} {} {}", self.name.green(), interpolated_base_url.blue().bold(), status_text, Request::format_time(duration_ms, config.nanosec).cyan(), width = 25);
         }
 
         (Some(response), duration_ms)

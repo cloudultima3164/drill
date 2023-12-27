@@ -27,7 +27,7 @@ impl<'a> Interpolator<'a> {
     }
   }
 
-  pub fn resolve(&self, url: &str, strict: bool) -> String {
+  pub fn resolve(&self, url: &str, _strict: bool) -> String {
     INTERPOLATION_REGEX
       .replace_all(url, |caps: &Captures| {
         let capture = &caps[1];
@@ -40,13 +40,7 @@ impl<'a> Interpolator<'a> {
           return item;
         }
 
-        if strict {
-          panic!("Unknown '{}' variable!", &capture);
-        }
-
-        eprintln!("{} Unknown '{}' variable!", "WARNING!".yellow().bold(), &capture);
-
-        "".to_string()
+        panic!("{} Couldn't resolve variable '{}'", "ERROR:".yellow().bold(), capture);
       })
       .to_string()
   }

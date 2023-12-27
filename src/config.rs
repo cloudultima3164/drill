@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use yaml_rust::{Yaml, YamlLoader};
 
 use crate::benchmark::Context;
@@ -8,7 +10,7 @@ const NITERATIONS: i64 = 1;
 const NRAMPUP: i64 = 0;
 
 pub struct Config {
-  pub base: String,
+  pub urls: BTreeMap<String, String>,
   pub concurrency: i64,
   pub iterations: i64,
   pub relaxed_interpolations: bool,
@@ -33,14 +35,14 @@ impl Config {
     let iterations = read_i64_configuration(config_doc, &interpolator, "iterations", NITERATIONS);
     let concurrency = read_i64_configuration(config_doc, &interpolator, "concurrency", iterations);
     let rampup = read_i64_configuration(config_doc, &interpolator, "rampup", NRAMPUP);
-    let base = read_str_configuration(config_doc, &interpolator, "base", "");
+    let urls = read_hash_configuration(config_doc, &interpolator, "urls");
 
     if concurrency > iterations {
       panic!("The concurrency can not be higher than the number of iterations")
     }
 
     Config {
-      base,
+      urls,
       concurrency,
       iterations,
       relaxed_interpolations,
@@ -54,6 +56,7 @@ impl Config {
   }
 }
 
+#[allow(dead_code)]
 fn read_str_configuration(config_doc: &Yaml, interpolator: &interpolator::Interpolator, name: &str, default: &str) -> String {
   match config_doc[name].as_str() {
     Some(value) => {
@@ -64,6 +67,7 @@ fn read_str_configuration(config_doc: &Yaml, interpolator: &interpolator::Interp
       }
     }
     None => {
+      // Won't this always be false?
       if config_doc[name].as_str().is_some() {
         println!("Invalid {name} value!");
       }
@@ -99,5 +103,22 @@ fn read_i64_configuration(config_doc: &Yaml, interpolator: &interpolator::Interp
 
       default
     }
+  }
+}
+
+fn read_hash_configuration(config_doc: &Yaml, interpolator: &interpolator::Interpolator, name: &str) -> BTreeMap<String, String> {
+  match config_doc[name].as_hash() {
+    Some(map) => map
+      .iter()
+      .map(|(key, val)| {
+        let key = key.as_str().unwrap().to_owned();
+        let mut val = val.as_str().unwrap().to_owned();
+        if val.contains('{') {
+          val = interpolator.resolve(&val, true);
+        }
+        (key, val)
+      })
+      .collect(),
+    None => BTreeMap::new(),
   }
 }

@@ -14,3 +14,5 @@ example/server/node_modules
 
 # Editor temp files
 .vscode
+
+/test/
