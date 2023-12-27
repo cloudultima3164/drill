@@ -5,8 +5,9 @@ use serde_json::json;
 
 use crate::benchmark::Context;
 
-static INTERPOLATION_PREFIX: &str = "{{";
-static INTERPOLATION_SUFFIX: &str = "}}";
+const INTERPOLATION_PREFIX: &str = "{{";
+const INTERPOLATION_SUFFIX: &str = "}}";
+const GLOBAL: &str = "global";
 
 lazy_static! {
   pub static ref INTERPOLATION_REGEX: Regex = {
@@ -27,12 +28,12 @@ impl<'a> Interpolator<'a> {
     }
   }
 
-  pub fn resolve(&self, url: &str, _strict: bool) -> String {
+  pub fn resolve(&self, resolvable: &str) -> String {
     INTERPOLATION_REGEX
-      .replace_all(url, |caps: &Captures| {
+      .replace_all(resolvable, |caps: &Captures| {
         let capture = &caps[1];
 
-        if let Some(item) = self.resolve_context_interpolation(capture) {
+        if let Some(item) = self.resolve_global_reference(capture) {
           return item;
         }
 
@@ -40,9 +41,17 @@ impl<'a> Interpolator<'a> {
           return item;
         }
 
+        if let Some(item) = self.resolve_context_interpolation(capture) {
+          return item;
+        }
+
         panic!("{} Couldn't resolve variable '{}'", "ERROR:".yellow().bold(), capture);
       })
       .to_string()
+  }
+
+  fn resolve_global_reference(&self, value: &str) -> Option<String> {
+    self.context[GLOBAL].as_object().expect("'global' object doesn't match expected data type (object)").get(value).map(|v| v.as_str().unwrap().to_owned())
   }
 
   fn resolve_environment_interpolation(&self, value: &str) -> Option<String> {
@@ -55,8 +64,7 @@ impl<'a> Interpolator<'a> {
   fn resolve_context_interpolation(&self, value: &str) -> Option<String> {
     // convert "." and "[" to "/" and "]" to "" to look like a json pointer
     let val: String = format!("/{}", value.replace(['.', '['], "/").replace(']', ""));
-
-    // force the context into a Value, and acess by pointer
+    // force the context into a Value, and access by pointer
     if let Some(item) = json!(self.context).pointer(&val).to_owned() {
       return Some(match item.to_owned() {
         serde_json::Value::Null => "".to_owned(),
@@ -85,7 +93,7 @@ mod tests {
 
     let interpolator = Interpolator::new(&context);
     let url = String::from("http://example.com/users/{{ user_Id }}/view/{{ user_Id }}/{{ Transfer-Encoding }}");
-    let interpolated = interpolator.resolve(&url, true);
+    let interpolated = interpolator.resolve(&url);
 
     assert_eq!(interpolated, "http://example.com/users/12/view/12/chunked");
   }
@@ -105,15 +113,15 @@ mod tests {
 
     let interpolator = Interpolator::new(&context);
 
-    assert_eq!(interpolator.resolve("{{ Null }}", true), "".to_string());
-    assert_eq!(interpolator.resolve("{{ Bool }}", true), "true".to_string());
-    assert_eq!(interpolator.resolve("{{ Number }}", true), "12".to_string());
-    assert_eq!(interpolator.resolve("{{ String }}", true), "string".to_string());
-    assert_eq!(interpolator.resolve("{{ Array }}", true), "[\"a\",\"b\",\"c\"]".to_string());
-    assert_eq!(interpolator.resolve("{{ Object }}", true), "{\"this\":\"that\"}".to_string());
-    assert_eq!(interpolator.resolve("{{ Nested.this.that.those[2].deee.eeee }}", true), "eeep".to_string());
-    assert_eq!(interpolator.resolve("{{ ArrayNested[0].a[1].aaa[0].aaaa }}", true), "123".to_string());
-    assert_eq!(interpolator.resolve("{{ ArrayNested[0].a[1].aaa[0].$aaaa }}", true), "$123".to_string());
+    assert_eq!(interpolator.resolve("{{ Null }}"), "".to_string());
+    assert_eq!(interpolator.resolve("{{ Bool }}"), "true".to_string());
+    assert_eq!(interpolator.resolve("{{ Number }}"), "12".to_string());
+    assert_eq!(interpolator.resolve("{{ String }}"), "string".to_string());
+    assert_eq!(interpolator.resolve("{{ Array }}"), "[\"a\",\"b\",\"c\"]".to_string());
+    assert_eq!(interpolator.resolve("{{ Object }}"), "{\"this\":\"that\"}".to_string());
+    assert_eq!(interpolator.resolve("{{ Nested.this.that.those[2].deee.eeee }}"), "eeep".to_string());
+    assert_eq!(interpolator.resolve("{{ ArrayNested[0].a[1].aaa[0].aaaa }}"), "123".to_string());
+    assert_eq!(interpolator.resolve("{{ ArrayNested[0].a[1].aaa[0].$aaaa }}"), "$123".to_string());
   }
 
   #[test]
@@ -123,7 +131,7 @@ mod tests {
 
     let interpolator = Interpolator::new(&context);
     let url = String::from("/users/{{ userId }}");
-    interpolator.resolve(&url, true);
+    interpolator.resolve(&url);
   }
 
   #[test]
@@ -132,7 +140,7 @@ mod tests {
 
     let interpolator = Interpolator::new(&context);
     let url = String::from("/users/{{ userId }}");
-    let interpolated = interpolator.resolve(&url, false);
+    let interpolated = interpolator.resolve(&url);
 
     assert_eq!(interpolated, "/users/");
   }
@@ -145,7 +153,7 @@ mod tests {
 
     let interpolator = Interpolator::new(&context);
     let url = String::from("http://example.com/postalcode/{{ zip5 }}/view/{{ zip5 }}");
-    let interpolated = interpolator.resolve(&url, true);
+    let interpolated = interpolator.resolve(&url);
 
     assert_eq!(interpolated, "http://example.com/postalcode/90210/view/90210");
   }
@@ -158,7 +166,7 @@ mod tests {
 
     let interpolator = Interpolator::new(&context);
     let url = String::from("http://example.com/postalcode/{{ 5digitzip }}/view/{{ 5digitzip }}");
-    let interpolated = interpolator.resolve(&url, true);
+    let interpolated = interpolator.resolve(&url);
 
     assert_eq!(interpolated, "http://example.com/postalcode/{{ 5digitzip }}/view/{{ 5digitzip }}");
   }
@@ -170,7 +178,7 @@ mod tests {
     let context: Context = Context::new();
     let interpolator = Interpolator::new(&context);
     let url = String::from("http://example.com/postalcode/{{ FOO }}");
-    let interpolated = interpolator.resolve(&url, true);
+    let interpolated = interpolator.resolve(&url);
 
     assert_eq!(interpolated, "http://example.com/postalcode/BAR");
   }

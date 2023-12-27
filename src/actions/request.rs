@@ -115,7 +115,7 @@ impl Request {
           if let Some(url_map) = value.as_object() {
             let mut joined_url = PathBuf::from_str(url_map.get(&base_url).ok_or_else(|| format!("No such key in \"urls\" object: {}", base_url)).unwrap().as_str().unwrap()).unwrap();
             joined_url.push(self.url.clone());
-            interpolator.resolve(joined_url.to_str().unwrap(), false)
+            interpolator.resolve(joined_url.to_str().unwrap())
           } else {
             panic!("{} Wrong type for 'urls' variable.", "ERROR:".yellow().bold());
           }
@@ -125,7 +125,7 @@ impl Request {
         }
       }
     } else {
-      interpolator.resolve(&self.url, false)
+      interpolator.resolve(&self.url)
     };
 
     let url = Url::parse(&interpolated_base_url).expect("Invalid url");
@@ -150,7 +150,7 @@ impl Request {
       let client = pool2.entry(domain).or_insert_with(|| ClientBuilder::default().danger_accept_invalid_certs(config.no_check_certificate).build().unwrap());
 
       let request = if let Some(body) = self.body.as_ref() {
-        interpolated_body = interpolator.resolve(body, !config.relaxed_interpolations);
+        interpolated_body = interpolator.resolve(body);
 
         client.request(method, interpolated_base_url.as_str()).body(interpolated_body)
       } else {
@@ -173,7 +173,7 @@ impl Request {
 
     // Resolve headers
     for (key, val) in self.headers.iter() {
-      let interpolated_header = interpolator.resolve(val, !config.relaxed_interpolations);
+      let interpolated_header = interpolator.resolve(val);
       headers.insert(HeaderName::from_bytes(key.as_bytes()).unwrap(), HeaderValue::from_str(&interpolated_header).unwrap());
     }
 
