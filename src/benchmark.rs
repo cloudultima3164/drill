@@ -39,6 +39,7 @@ async fn run_iteration(benchmark: Arc<Benchmark>, pool: Pool, config: Arc<Config
 
   context.insert("iteration".to_string(), json!(iteration.to_string()));
   context.insert("urls".to_string(), json!(config.urls));
+  context.insert("global".to_string(), json!(config.global));
 
   for item in benchmark.iter() {
     item.execute(&mut context, &mut reports, &pool, &config).await;
@@ -67,8 +68,13 @@ pub fn execute(benchmark_path: &str, report_path_option: Option<&str>, relaxed_i
       println!("{} {}", "Rampup".yellow(), config.rampup.to_string().purple());
     }
 
-    println!("{}", "Urls".yellow());
+    println!("{}", "URLs".yellow());
     for (key, val) in config.urls.iter() {
+      println!("  {}: {}", key.purple(), val.green());
+    }
+
+    println!("{}", "Global Variables".yellow());
+    for (key, val) in config.global.iter() {
       println!("  {}: {}", key.purple(), val.green());
     }
     println!();

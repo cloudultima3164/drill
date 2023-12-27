@@ -37,17 +37,18 @@ impl Assert {
 #[async_trait]
 impl Runnable for Assert {
   async fn execute(&self, context: &mut Context, _reports: &mut Reports, _pool: &Pool, config: &Config) {
-    if !config.quiet {
-      println!("{:width$} {}={}", self.name.green(), self.key.cyan().bold(), self.value.magenta(), width = 25);
-    }
-
     let interpolator = interpolator::Interpolator::new(context);
     let eval = format!("{{{{ {} }}}}", &self.key);
-    let stored = interpolator.resolve(&eval, true);
-    let assertion = json!(self.value.to_owned());
+    let lhs = interpolator.resolve(&eval);
+    let comparable = interpolator.resolve(&self.value);
+    let rhs = json!(comparable);
 
-    if !stored.eq(&assertion) {
-      panic!("Assertion mismatched: {} != {}", stored, assertion);
+    if !config.quiet {
+      println!("{:width$} {}={}", self.name.green(), self.key.cyan().bold(), comparable.magenta(), width = 25);
+    }
+
+    if !lhs.eq(&rhs) {
+      panic!("Assertion mismatched: {} != {}", lhs, rhs);
     }
 
     if !config.quiet {

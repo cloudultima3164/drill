@@ -11,6 +11,7 @@ const NRAMPUP: i64 = 0;
 
 pub struct Config {
   pub urls: BTreeMap<String, String>,
+  pub global: BTreeMap<String, String>,
   pub concurrency: i64,
   pub iterations: i64,
   pub relaxed_interpolations: bool,
@@ -36,6 +37,7 @@ impl Config {
     let concurrency = read_i64_configuration(config_doc, &interpolator, "concurrency", iterations);
     let rampup = read_i64_configuration(config_doc, &interpolator, "rampup", NRAMPUP);
     let urls = read_hash_configuration(config_doc, &interpolator, "urls");
+    let global = read_hash_configuration(config_doc, &interpolator, "global");
 
     if concurrency > iterations {
       panic!("The concurrency can not be higher than the number of iterations")
@@ -43,6 +45,7 @@ impl Config {
 
     Config {
       urls,
+      global,
       concurrency,
       iterations,
       relaxed_interpolations,
@@ -61,7 +64,7 @@ fn read_str_configuration(config_doc: &Yaml, interpolator: &interpolator::Interp
   match config_doc[name].as_str() {
     Some(value) => {
       if value.contains('{') {
-        interpolator.resolve(value, true)
+        interpolator.resolve(value)
       } else {
         value.to_owned()
       }
@@ -81,7 +84,7 @@ fn read_i64_configuration(config_doc: &Yaml, interpolator: &interpolator::Interp
   let value = if let Some(value) = config_doc[name].as_i64() {
     Some(value)
   } else if let Some(key) = config_doc[name].as_str() {
-    interpolator.resolve(key, false).parse::<i64>().ok()
+    interpolator.resolve(key).parse::<i64>().ok()
   } else {
     None
   };
@@ -114,7 +117,7 @@ fn read_hash_configuration(config_doc: &Yaml, interpolator: &interpolator::Inter
         let key = key.as_str().unwrap().to_owned();
         let mut val = val.as_str().unwrap().to_owned();
         if val.contains('{') {
-          val = interpolator.resolve(&val, true);
+          val = interpolator.resolve(&val);
         }
         (key, val)
       })
