@@ -18,12 +18,7 @@ pub struct Exec {
 }
 
 impl Exec {
-  pub fn is_that_you(item: &Yaml) -> bool {
-    item["exec"].as_hash().is_some()
-  }
-
-  pub fn new(item: &Yaml, _with_item: Option<Yaml>) -> Exec {
-    let name = extract(item, "name");
+  pub fn new(name: String, item: &Yaml) -> Exec {
     let command = extract(&item["exec"], "command");
     let assign = extract_optional(item, "assign");
 

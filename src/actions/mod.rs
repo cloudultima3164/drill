@@ -1,8 +1,10 @@
 use async_trait::async_trait;
+use serde::Deserialize;
 use yaml_rust::Yaml;
 
 mod assert;
 mod assign;
+mod db_query;
 mod delay;
 mod exec;
 mod request;
@@ -21,6 +23,24 @@ use std::fmt;
 #[async_trait]
 pub trait Runnable {
   async fn execute(&self, context: &mut Context, reports: &mut Reports, pool: &Pool, config: &Config);
+}
+
+#[derive(Deserialize)]
+pub enum WithOps {
+  #[serde(rename(deserialize = "with_items"))]
+  Items,
+  #[serde(rename(deserialize = "with_items_range"))]
+  Range,
+  #[serde(rename(deserialize = "with_items_from_csv"))]
+  Csv,
+  #[serde(rename(deserialize = "with_items_from_file"))]
+  File,
+}
+
+impl From<&str> for WithOps {
+  fn from(value: &str) -> Self {
+    serde_json::from_value(serde_json::Value::String(value.to_owned())).map_err(|_| format!("Unknown 'with' attribute, {value}")).unwrap()
+  }
 }
 
 #[derive(Clone)]

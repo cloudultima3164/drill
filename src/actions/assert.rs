@@ -17,12 +17,7 @@ pub struct Assert {
 }
 
 impl Assert {
-  pub fn is_that_you(item: &Yaml) -> bool {
-    item["assert"].as_hash().is_some()
-  }
-
-  pub fn new(item: &Yaml, _with_item: Option<Yaml>) -> Assert {
-    let name = extract(item, "name");
+  pub fn new(name: String, item: &Yaml) -> Assert {
     let key = extract(&item["assert"], "key");
     let value = extract(&item["assert"], "value");
 

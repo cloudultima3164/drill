@@ -1,10 +1,12 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use colored::Colorize;
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 use reqwest::{
   header::{self, HeaderMap, HeaderName, HeaderValue},
   ClientBuilder, Method, Response,
@@ -19,9 +21,12 @@ use serde_json::{json, Map, Value};
 use crate::actions::{extract, extract_optional};
 use crate::benchmark::{Context, Pool, Reports};
 use crate::config::Config;
-use crate::interpolator;
+use crate::expandable::Pick;
+use crate::{interpolator, reader};
 
 use crate::actions::{Report, Runnable};
+
+use super::WithOps;
 
 static USER_AGENT: &str = "drill";
 
@@ -35,8 +40,9 @@ pub struct Request {
   method: String,
   headers: HashMap<String, String>,
   pub body: Option<String>,
-  pub with_item: Option<Yaml>,
-  pub index: Option<u32>,
+  pub with_items: Vec<Yaml>,
+  pub shuffle: bool,
+  pub pick: Pick,
   pub assign: Option<String>,
 }
 
@@ -48,15 +54,28 @@ struct AssignedRequest {
 }
 
 impl Request {
-  pub fn is_that_you(item: &Yaml) -> bool {
-    item["request"].as_hash().is_some()
-  }
+  pub fn new(name: String, assign: Option<String>, item: &Yaml, parent_path: &str) -> Request {
+    let mut with_keys = item.as_hash().unwrap().keys().filter(|key| key.as_str().unwrap().contains("with"));
+    if with_keys.clone().count() > 1 {
+      panic!("{} 'with' attributes are mutually exclusive", "ERROR".yellow().bold());
+    }
 
-  pub fn new(item: &Yaml, with_item: Option<Yaml>, index: Option<u32>) -> Request {
-    let name = extract(item, "name");
-    let base = extract_optional(&item["request"], "base");
-    let url = extract(&item["request"], "url");
-    let assign = extract_optional(item, "assign");
+    let with_items = if let Some(key) = with_keys.next() {
+      let op = WithOps::from(key.as_str().unwrap());
+      match op {
+        WithOps::Items => values(item),
+        WithOps::Range => iter_values(item),
+        WithOps::Csv => csv_values(parent_path, item),
+        WithOps::File => file_values(parent_path, item),
+      }
+    } else {
+      Vec::new()
+    };
+
+    let shuffle = item["shuffle"].as_bool().unwrap_or(false);
+    let pick = Pick::new(item["pick"].as_i64().unwrap_or(with_items.len() as i64), &with_items);
+    let base = extract_optional(&item, "base");
+    let url = extract(&item, "url");
 
     let method = if let Some(v) = extract_optional(&item["request"], "method") {
       v.to_uppercase()
@@ -91,8 +110,9 @@ impl Request {
       method,
       headers,
       body,
-      with_item,
-      index,
+      with_items,
+      shuffle,
+      pick,
       assign,
     }
   }
@@ -105,7 +125,16 @@ impl Request {
     }
   }
 
-  async fn send_request(&self, context: &mut Context, pool: &Pool, config: &Config) -> (Option<Response>, f64) {
+  async fn send_request(&self, context: &mut Context, pool: &Pool, config: &Config, with_item: Option<&Yaml>) -> (Option<Response>, f64) {
+    // Adding extra params as needed
+    if let Some(val) = with_item {
+      println!("{val:#?}");
+      let map = val.as_hash().unwrap();
+      for (key, val) in map {
+        context.insert(key.clone().into_string().unwrap(), Value::String(val.clone().into_string().unwrap()));
+      }
+    }
+
     let interpolator = interpolator::Interpolator::new(context);
 
     // Resolve relative urls
@@ -213,48 +242,9 @@ impl Request {
       }
     }
   }
-}
 
-fn yaml_to_json(data: Yaml) -> Value {
-  if let Some(b) = data.as_bool() {
-    json!(b)
-  } else if let Some(i) = data.as_i64() {
-    json!(i)
-  } else if let Some(s) = data.as_str() {
-    json!(s)
-  } else if let Some(h) = data.as_hash() {
-    let mut map = Map::new();
-
-    for (key, value) in h.iter() {
-      map.entry(key.as_str().unwrap()).or_insert(yaml_to_json(value.clone()));
-    }
-
-    json!(map)
-  } else if let Some(v) = data.as_vec() {
-    let mut array = Vec::new();
-
-    for value in v.iter() {
-      array.push(yaml_to_json(value.clone()));
-    }
-
-    json!(array)
-  } else {
-    panic!("Unknown Yaml node")
-  }
-}
-
-#[async_trait]
-impl Runnable for Request {
-  async fn execute(&self, context: &mut Context, reports: &mut Reports, pool: &Pool, config: &Config) {
-    if self.with_item.is_some() {
-      context.insert("item".to_string(), yaml_to_json(self.with_item.clone().unwrap()));
-    }
-
-    if self.index.is_some() {
-      context.insert("index".to_string(), json!(self.index.unwrap()));
-    }
-
-    let (res, duration_ms) = self.send_request(context, pool, config).await;
+  async fn execute_one_request(&self, context: &mut Context, pool: &Pool, config: &Config, reports: &mut Reports, with_item: Option<&Yaml>) {
+    let (res, duration_ms) = self.send_request(context, pool, config, with_item).await;
 
     let log_message_response = if config.verbose {
       Some(log_message_response(&res, duration_ms))
@@ -314,6 +304,87 @@ impl Runnable for Request {
       }
     }
   }
+}
+
+#[async_trait]
+impl Runnable for Request {
+  async fn execute(&self, context: &mut Context, reports: &mut Reports, pool: &Pool, config: &Config) {
+    if self.with_items.is_empty() {
+      self.execute_one_request(context, pool, config, reports, None).await;
+    } else {
+      let mut with_items = self.with_items.clone();
+      if self.shuffle {
+        let mut rng = thread_rng();
+        with_items.shuffle(&mut rng);
+      }
+
+      for with_item in with_items.iter().take(self.pick.inner()) {
+        self.execute_one_request(context, pool, config, reports, Some(with_item)).await;
+      }
+    }
+  }
+}
+
+fn csv_values(parent_path: &str, item: &Yaml) -> Vec<Yaml> {
+  let (with_items_path, quote_char) = if let Some(with_items_path) = item["with_items_from_csv"].as_str() {
+    (with_items_path, b'\"')
+  } else if let Some(_with_items_hash) = item["with_items_from_csv"].as_hash() {
+    let with_items_path = item["with_items_from_csv"]["file_name"].as_str().expect("Expected a file_name");
+    let quote_char = item["with_items_from_csv"]["quote_char"].as_str().unwrap_or("\"").bytes().next().unwrap();
+
+    (with_items_path, quote_char)
+  } else {
+    unreachable!();
+  };
+
+  let with_items_filepath = Path::new(parent_path).with_file_name(with_items_path);
+  let final_path = with_items_filepath.to_str().unwrap();
+
+  reader::read_csv_file_as_yml(final_path, quote_char)
+}
+
+fn file_values(parent_path: &str, item: &Yaml) -> Vec<Yaml> {
+  let with_items_path = if let Some(with_items_path) = item["with_items_from_file"].as_str() {
+    with_items_path
+  } else {
+    unreachable!();
+  };
+
+  let with_items_filepath = Path::new(parent_path).with_file_name(with_items_path);
+  let final_path = with_items_filepath.to_str().unwrap();
+
+  reader::read_file_as_yml_array(final_path)
+}
+
+fn iter_values(item: &Yaml) -> Vec<Yaml> {
+  if let Some(with_iter_items) = item["with_items_range"].as_hash() {
+    let init = Yaml::Integer(1);
+    let lstart = Yaml::String("start".into());
+    let lstep = Yaml::String("step".into());
+    let lstop = Yaml::String("stop".into());
+
+    let vstart: &Yaml = with_iter_items.get(&lstart).expect("Start property is mandatory");
+    let vstep: &Yaml = with_iter_items.get(&lstep).unwrap_or(&init);
+    let vstop: &Yaml = with_iter_items.get(&lstop).expect("Stop property is mandatory");
+
+    let start: i64 = vstart.as_i64().expect("Start needs to be a number");
+    let step: i64 = vstep.as_i64().expect("Step needs to be a number");
+    let stop: i64 = vstop.as_i64().expect("Stop needs to be a number");
+
+    let stop = stop + 1; // making stop inclusive
+
+    if stop > start && start > 0 {
+      (start..stop).step_by(step as usize).map(|int| Yaml::Integer(int)).collect()
+    } else {
+      Vec::new()
+    }
+  } else {
+    Vec::new()
+  }
+}
+
+pub fn values(item: &Yaml) -> Vec<Yaml> {
+  item["with_items"].as_vec().unwrap().clone()
 }
 
 fn log_request(request: &reqwest::Request) {
