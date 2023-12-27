@@ -108,11 +108,6 @@ impl Request {
   async fn send_request(&self, context: &mut Context, pool: &Pool, config: &Config) -> (Option<Response>, f64) {
     let interpolator = interpolator::Interpolator::new(context);
 
-    // Resolve the name and url
-    // let interpolated_name = interpolator.resolve(&self.name, !config.relaxed_interpolations);
-    let interpolated_name = &self.name;
-    // let interpolated_url = interpolator.resolve(&self.url, !config.relaxed_interpolations);
-
     // Resolve relative urls
     let interpolated_base_url = if let Some(base_url) = self.base.clone() {
       match context.get("urls") {
@@ -211,7 +206,7 @@ impl Request {
             status.to_string().yellow()
           };
 
-          println!("{:width$} {} {} {}", interpolated_name.green(), interpolated_base_url.blue().bold(), status_text, Request::format_time(duration_ms, config.nanosec).cyan(), width = 25);
+          println!("{:width$} {} {} {}", self.name.green(), interpolated_base_url.blue().bold(), status_text, Request::format_time(duration_ms, config.nanosec).cyan(), width = 25);
         }
 
         (Some(response), duration_ms)
