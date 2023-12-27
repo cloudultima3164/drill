@@ -16,14 +16,9 @@ pub struct Assign {
 }
 
 impl Assign {
-  pub fn is_that_you(item: &Yaml) -> bool {
-    item["assign"].as_hash().is_some()
-  }
-
-  pub fn new(item: &Yaml, _with_item: Option<Yaml>) -> Assign {
-    let name = extract(item, "name");
-    let key = extract(&item["assign"], "key");
-    let value = extract(&item["assign"], "value");
+  pub fn new(name: String, item: &Yaml) -> Assign {
+    let key = extract(&item, "key");
+    let value = extract(&item, "value");
 
     Assign {
       name,

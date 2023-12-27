@@ -1,14 +1,16 @@
 use std::path::Path;
-use yaml_rust::{Yaml, YamlEmitter};
+use yaml_rust::Yaml;
 
 use crate::interpolator::INTERPOLATION_REGEX;
 
-use crate::actions;
+use crate::actions::{extract, extract_optional};
 use crate::benchmark::Benchmark;
-use crate::expandable::{include, multi_csv_request, multi_file_request, multi_iter_request, multi_request};
+use crate::expandable::include;
 use crate::tags::Tags;
 
 use crate::reader;
+
+use super::expand::IncludeOp;
 
 pub fn is_that_you(item: &Yaml) -> bool {
   item["include"].as_str().is_some()
@@ -27,6 +29,7 @@ pub fn expand(parent_path: &str, item: &Yaml, benchmark: &mut Benchmark, tags: &
   expand_from_filepath(final_path, benchmark, None, tags);
 }
 
+const IGNORE_KEYS: [&str; 3] = ["name", "assign", "tags"];
 pub fn expand_from_filepath(parent_path: &str, benchmark: &mut Benchmark, accessor: Option<&str>, tags: &Tags) {
   let docs = reader::read_file_as_yml(parent_path);
   let items = reader::read_yaml_doc_accessor(&docs[0], accessor);
@@ -42,30 +45,11 @@ pub fn expand_from_filepath(parent_path: &str, benchmark: &mut Benchmark, access
       continue;
     }
 
-    if multi_request::is_that_you(item) {
-      multi_request::expand(item, benchmark);
-    } else if multi_iter_request::is_that_you(item) {
-      multi_iter_request::expand(item, benchmark);
-    } else if multi_csv_request::is_that_you(item) {
-      multi_csv_request::expand(parent_path, item, benchmark);
-    } else if multi_file_request::is_that_you(item) {
-      multi_file_request::expand(parent_path, item, benchmark);
-    } else if actions::Delay::is_that_you(item) {
-      benchmark.push(Box::new(actions::Delay::new(item, None)));
-    } else if actions::Exec::is_that_you(item) {
-      benchmark.push(Box::new(actions::Exec::new(item, None)));
-    } else if actions::Assign::is_that_you(item) {
-      benchmark.push(Box::new(actions::Assign::new(item, None)));
-    } else if actions::Assert::is_that_you(item) {
-      benchmark.push(Box::new(actions::Assert::new(item, None)));
-    } else if actions::Request::is_that_you(item) {
-      benchmark.push(Box::new(actions::Request::new(item, None, None)));
-    } else {
-      let mut out_str = String::new();
-      let mut emitter = YamlEmitter::new(&mut out_str);
-      emitter.dump(item).unwrap();
-      panic!("Unknown node:\n\n{}\n\n", out_str);
-    }
+    let (target_key, target_value) = item.as_hash().unwrap().into_iter().filter(|(key, _)| !IGNORE_KEYS.contains(&key.as_str().unwrap())).next().unwrap();
+    let op = IncludeOp::from(target_key.as_str().unwrap());
+    let name = extract(item, "name");
+    let assign = extract_optional(item, "assign");
+    op.expand(target_value, benchmark, name, assign, Some(parent_path))
   }
 }
 

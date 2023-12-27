@@ -3,7 +3,6 @@ use colored::*;
 use tokio::time::sleep;
 use yaml_rust::Yaml;
 
-use crate::actions::extract;
 use crate::actions::Runnable;
 use crate::benchmark::{Context, Pool, Reports};
 use crate::config::Config;
@@ -18,13 +17,8 @@ pub struct Delay {
 }
 
 impl Delay {
-  pub fn is_that_you(item: &Yaml) -> bool {
-    item["delay"].as_hash().is_some()
-  }
-
-  pub fn new(item: &Yaml, _with_item: Option<Yaml>) -> Delay {
-    let name = extract(item, "name");
-    let seconds = u64::try_from(item["delay"]["seconds"].as_i64().unwrap()).expect("Invalid number of seconds");
+  pub fn new(name: String, item: &Yaml) -> Delay {
+    let seconds = u64::try_from(item["seconds"].as_i64().unwrap()).expect("Invalid number of seconds");
 
     Delay {
       name,
