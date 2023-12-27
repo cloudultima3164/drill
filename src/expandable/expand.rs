@@ -47,10 +47,8 @@ macro_rules! impl_action_expandables {
 impl_action_expandables! {
   AssertExpander : Assert : AssertArgs,
   AssignExpander : Assign : AssignArgs,
-  DelayExpander : Delay : DelayArgs,
-  ExecExpander : Exec : ExecArgs
+  DelayExpander : Delay : DelayArgs
 }
-
 pub struct RequestExpander;
 
 pub struct RequestArgs {
@@ -72,6 +70,27 @@ impl Expand for RequestExpander {
 
   fn expand(item: &Yaml, benchmark: &mut crate::benchmark::Benchmark, args: Self::Args) {
     benchmark.push(Box::new(Request::new(args.name.clone(), args.assign.clone(), item, &args.parent_path)));
+  }
+}
+pub struct ExecExpander;
+
+pub struct ExecArgs {
+  name: String,
+  assign: Option<String>,
+}
+
+impl Expand for ExecExpander {
+  type Args = ExecArgs;
+
+  fn create_args(name: String, assign: Option<String>, _parent_path: Option<&str>) -> Self::Args {
+    ExecArgs {
+      name,
+      assign,
+    }
+  }
+
+  fn expand(item: &Yaml, benchmark: &mut crate::benchmark::Benchmark, args: Self::Args) {
+    benchmark.push(Box::new(Exec::new(args.name.clone(), args.assign.clone(), item)));
   }
 }
 

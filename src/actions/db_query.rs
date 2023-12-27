@@ -18,8 +18,10 @@ pub struct Exec {
 }
 
 impl Exec {
-  pub fn new(name: String, assign: Option<String>, item: &Yaml) -> Exec {
-    let command = extract(&item, "command");
+  pub fn new(item: &Yaml, _with_item: Option<Yaml>) -> Exec {
+    let name = extract(item, "name");
+    let command = extract(&item["exec"], "command");
+    let assign = extract_optional(item, "assign");
 
     Exec {
       name,

@@ -18,7 +18,7 @@ pub struct Delay {
 
 impl Delay {
   pub fn new(name: String, item: &Yaml) -> Delay {
-    let seconds = u64::try_from(item["delay"]["seconds"].as_i64().unwrap()).expect("Invalid number of seconds");
+    let seconds = u64::try_from(item["seconds"].as_i64().unwrap()).expect("Invalid number of seconds");
 
     Delay {
       name,

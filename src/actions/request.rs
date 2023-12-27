@@ -128,7 +128,6 @@ impl Request {
   async fn send_request(&self, context: &mut Context, pool: &Pool, config: &Config, with_item: Option<&Yaml>) -> (Option<Response>, f64) {
     // Adding extra params as needed
     if let Some(val) = with_item {
-      println!("{val:#?}");
       let map = val.as_hash().unwrap();
       for (key, val) in map {
         context.insert(key.clone().into_string().unwrap(), Value::String(val.clone().into_string().unwrap()));

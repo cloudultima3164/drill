@@ -17,8 +17,8 @@ pub struct Assign {
 
 impl Assign {
   pub fn new(name: String, item: &Yaml) -> Assign {
-    let key = extract(&item["assign"], "key");
-    let value = extract(&item["assign"], "value");
+    let key = extract(&item, "key");
+    let value = extract(&item, "value");
 
     Assign {
       name,

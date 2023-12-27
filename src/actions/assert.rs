@@ -18,8 +18,8 @@ pub struct Assert {
 
 impl Assert {
   pub fn new(name: String, item: &Yaml) -> Assert {
-    let key = extract(&item["assert"], "key");
-    let value = extract(&item["assert"], "value");
+    let key = extract(&item, "key");
+    let value = extract(&item, "value");
 
     Assert {
       name,
