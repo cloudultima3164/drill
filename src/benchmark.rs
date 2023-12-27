@@ -38,7 +38,7 @@ async fn run_iteration(benchmark: Arc<Benchmark>, pool: Pool, config: Arc<Config
   let mut reports: Vec<Report> = Vec::new();
 
   context.insert("iteration".to_string(), json!(iteration.to_string()));
-  context.insert("base".to_string(), json!(config.base.to_string()));
+  context.insert("urls".to_string(), json!(config.urls));
 
   for item in benchmark.iter() {
     item.execute(&mut context, &mut reports, &pool, &config).await;
@@ -58,16 +58,21 @@ fn join<S: ToString>(l: Vec<S>, sep: &str) -> String {
 pub fn execute(benchmark_path: &str, report_path_option: Option<&str>, relaxed_interpolations: bool, no_check_certificate: bool, quiet: bool, nanosec: bool, timeout: Option<&str>, verbose: bool, tags: &Tags) -> BenchmarkResult {
   let config = Arc::new(Config::new(benchmark_path, relaxed_interpolations, no_check_certificate, quiet, nanosec, timeout.map_or(10, |t| t.parse().unwrap_or(10)), verbose));
 
-  if report_path_option.is_some() {
-    println!("{}: {}. Ignoring {} and {} properties...", "Report mode".yellow(), "on".purple(), "concurrency".yellow(), "iterations".yellow());
-  } else {
-    println!("{} {}", "Concurrency".yellow(), config.concurrency.to_string().purple());
-    println!("{} {}", "Iterations".yellow(), config.iterations.to_string().purple());
-    println!("{} {}", "Rampup".yellow(), config.rampup.to_string().purple());
-  }
+  if verbose {
+    if report_path_option.is_some() {
+      println!("{}: {}. Ignoring {} and {} properties...", "Report mode".yellow(), "on".purple(), "concurrency".yellow(), "iterations".yellow());
+    } else {
+      println!("{} {}", "Concurrency".yellow(), config.concurrency.to_string().purple());
+      println!("{} {}", "Iterations".yellow(), config.iterations.to_string().purple());
+      println!("{} {}", "Rampup".yellow(), config.rampup.to_string().purple());
+    }
 
-  println!("{} {}", "Base URL".yellow(), config.base.purple());
-  println!();
+    println!("{}", "Urls".yellow());
+    for (key, val) in config.urls.iter() {
+      println!("  {}: {}", key.purple(), val.green());
+    }
+    println!();
+  }
 
   let threads = std::cmp::min(num_cpus::get(), config.concurrency as usize);
   let rt = runtime::Builder::new_multi_thread().enable_all().worker_threads(threads).build().unwrap();

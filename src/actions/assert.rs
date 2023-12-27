@@ -38,7 +38,7 @@ impl Assert {
 impl Runnable for Assert {
   async fn execute(&self, context: &mut Context, _reports: &mut Reports, _pool: &Pool, config: &Config) {
     if !config.quiet {
-      println!("{:width$} {}={}?", self.name.green(), self.key.cyan().bold(), self.value.magenta(), width = 25);
+      println!("{:width$} {}={}", self.name.green(), self.key.cyan().bold(), self.value.magenta(), width = 25);
     }
 
     let interpolator = interpolator::Interpolator::new(context);
@@ -48,6 +48,10 @@ impl Runnable for Assert {
 
     if !stored.eq(&assertion) {
       panic!("Assertion mismatched: {} != {}", stored, assertion);
+    }
+
+    if !config.quiet {
+      println!("{:width$}", "Assertion successful".red(), width = 25);
     }
   }
 }
