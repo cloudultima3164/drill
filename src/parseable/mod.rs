@@ -1,6 +1,6 @@
 pub mod include;
 
-pub mod expand;
+pub mod parse;
 
 use yaml_rust::Yaml;
 

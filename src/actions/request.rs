@@ -21,7 +21,7 @@ use serde_json::{json, Map, Value};
 use crate::actions::{extract, extract_optional};
 use crate::benchmark::{Context, Pool, Reports};
 use crate::config::Config;
-use crate::expandable::Pick;
+use crate::parseable::Pick;
 use crate::{interpolator, reader};
 
 use crate::actions::{Report, Runnable};

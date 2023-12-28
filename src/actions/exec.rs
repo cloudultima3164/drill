@@ -4,8 +4,8 @@ use serde_json::json;
 use std::process::Command;
 use yaml_rust::Yaml;
 
+use crate::actions::extract;
 use crate::actions::Runnable;
-use crate::actions::{extract, extract_optional};
 use crate::benchmark::{Context, Pool, Reports};
 use crate::config::Config;
 use crate::interpolator;

@@ -6,50 +6,50 @@ use crate::{
   benchmark::Benchmark,
 };
 
-pub trait Expand: Send + Sync + 'static {
+pub trait Parse: Send + Sync + 'static {
   type Args;
   fn create_args(name: String, assign: Option<String>, parent_path: Option<&str>) -> Self::Args;
-  fn expand(item: &Yaml, benchmark: &mut Benchmark, args: Self::Args);
+  fn parse(item: &Yaml, benchmark: &mut Benchmark, args: Self::Args);
 
   fn invoke(item: &Yaml, benchmark: &mut Benchmark, name: String, assign: Option<String>, parent_path: Option<&str>) {
-    Self::expand(item, benchmark, Self::create_args(name, assign, parent_path))
+    Self::parse(item, benchmark, Self::create_args(name, assign, parent_path))
   }
 }
 
-macro_rules! impl_action_expandable {
-  ($expander:ident, $action:ident, $args:ident) => {
-    pub struct $expander;
+macro_rules! impl_action_parseable {
+  ($parseer:ident, $action:ident, $args:ident) => {
+    pub struct $parseer;
 
     pub struct $args {
       name: String,
     }
 
-    impl Expand for $expander {
+    impl Parse for $parseer {
       type Args = $args;
       fn create_args(name: String, _assign: Option<String>, _parent_path: Option<&str>) -> Self::Args {
         $args {
           name,
         }
       }
-      fn expand(item: &Yaml, benchmark: &mut crate::benchmark::Benchmark, args: Self::Args) {
+      fn parse(item: &Yaml, benchmark: &mut crate::benchmark::Benchmark, args: Self::Args) {
         benchmark.push(Box::new($action::new(args.name, item)));
       }
     }
   };
 }
 
-macro_rules! impl_action_expandables {
-      ($($expander:ident : $action:ident : $args:ident),*) => {
-        $(impl_action_expandable!($expander, $action, $args);)*
+macro_rules! impl_action_parseables {
+      ($($parseer:ident : $action:ident : $args:ident),*) => {
+        $(impl_action_parseable!($parseer, $action, $args);)*
       };
   }
 
-impl_action_expandables! {
-  AssertExpander : Assert : AssertArgs,
-  AssignExpander : Assign : AssignArgs,
-  DelayExpander : Delay : DelayArgs
+impl_action_parseables! {
+  AssertParseer : Assert : AssertArgs,
+  AssignParseer : Assign : AssignArgs,
+  DelayParseer : Delay : DelayArgs
 }
-pub struct RequestExpander;
+pub struct RequestParseer;
 
 pub struct RequestArgs {
   name: String,
@@ -57,7 +57,7 @@ pub struct RequestArgs {
   parent_path: String,
 }
 
-impl Expand for RequestExpander {
+impl Parse for RequestParseer {
   type Args = RequestArgs;
 
   fn create_args(name: String, assign: Option<String>, parent_path: Option<&str>) -> Self::Args {
@@ -68,18 +68,18 @@ impl Expand for RequestExpander {
     }
   }
 
-  fn expand(item: &Yaml, benchmark: &mut crate::benchmark::Benchmark, args: Self::Args) {
+  fn parse(item: &Yaml, benchmark: &mut crate::benchmark::Benchmark, args: Self::Args) {
     benchmark.push(Box::new(Request::new(args.name.clone(), args.assign.clone(), item, &args.parent_path)));
   }
 }
-pub struct ExecExpander;
+pub struct ExecParseer;
 
 pub struct ExecArgs {
   name: String,
   assign: Option<String>,
 }
 
-impl Expand for ExecExpander {
+impl Parse for ExecParseer {
   type Args = ExecArgs;
 
   fn create_args(name: String, assign: Option<String>, _parent_path: Option<&str>) -> Self::Args {
@@ -89,7 +89,7 @@ impl Expand for ExecExpander {
     }
   }
 
-  fn expand(item: &Yaml, benchmark: &mut crate::benchmark::Benchmark, args: Self::Args) {
+  fn parse(item: &Yaml, benchmark: &mut crate::benchmark::Benchmark, args: Self::Args) {
     benchmark.push(Box::new(Exec::new(args.name.clone(), args.assign.clone(), item)));
   }
 }
@@ -113,21 +113,21 @@ impl From<&str> for IncludeOp {
 }
 
 impl IncludeOp {
-  pub fn expand(&self, item: &Yaml, benchmark: &mut Benchmark, name: String, assign: Option<String>, parent_path: Option<&str>) {
+  pub fn parse(&self, item: &Yaml, benchmark: &mut Benchmark, name: String, assign: Option<String>, parent_path: Option<&str>) {
     match self {
       IncludeOp::Include => todo!(),
-      IncludeOp::Assert => AssertExpander::invoke(item, benchmark, name, assign, parent_path),
-      IncludeOp::Assign => AssignExpander::invoke(item, benchmark, name, assign, parent_path),
-      IncludeOp::Delay => DelayExpander::invoke(item, benchmark, name, assign, parent_path),
-      IncludeOp::Exec => ExecExpander::invoke(item, benchmark, name, assign, parent_path),
-      IncludeOp::Request => RequestExpander::invoke(item, benchmark, name, assign, parent_path),
+      IncludeOp::Assert => AssertParseer::invoke(item, benchmark, name, assign, parent_path),
+      IncludeOp::Assign => AssignParseer::invoke(item, benchmark, name, assign, parent_path),
+      IncludeOp::Delay => DelayParseer::invoke(item, benchmark, name, assign, parent_path),
+      IncludeOp::Exec => ExecParseer::invoke(item, benchmark, name, assign, parent_path),
+      IncludeOp::Request => RequestParseer::invoke(item, benchmark, name, assign, parent_path),
     }
   }
 }
 
 #[cfg(test)]
 mod test {
-  use crate::expandable::expand::IncludeOp;
+  use crate::parseable::parse::IncludeOp;
 
   #[test]
   fn test() {
