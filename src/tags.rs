@@ -4,20 +4,18 @@ use std::collections::HashSet;
 use yaml_rust::{Yaml, YamlEmitter};
 
 #[derive(Debug)]
-pub struct Tags<'a> {
-  pub tags: Option<HashSet<&'a str>>,
-  pub skip_tags: Option<HashSet<&'a str>>,
+pub struct Tags {
+  pub tags: HashSet<String>,
+  pub skip_tags: HashSet<String>,
 }
 
-impl<'a> Tags<'a> {
-  pub fn new(tags_option: Option<&'a str>, skip_tags_option: Option<&'a str>) -> Self {
-    let tags: Option<HashSet<&str>> = tags_option.map(|m| m.split(',').map(|s| s.trim()).collect());
-    let skip_tags: Option<HashSet<&str>> = skip_tags_option.map(|m| m.split(',').map(|s| s.trim()).collect());
+impl Tags {
+  pub fn new(tags_option: Vec<String>, skip_tags_option: Vec<String>) -> Self {
+    let tags: HashSet<String> = tags_option.into_iter().collect();
+    let skip_tags: HashSet<String> = skip_tags_option.into_iter().collect();
 
-    if let (Some(t), Some(s)) = (&tags, &skip_tags) {
-      if !t.is_disjoint(s) {
-        panic!("`tags` and `skip-tags` must not contain the same values!");
-      }
+    if !tags.is_disjoint(&skip_tags) {
+      panic!("`tags` and `skip-tags` must not contain the same values!");
     }
 
     Tags {
@@ -29,29 +27,32 @@ impl<'a> Tags<'a> {
   pub fn should_skip_item(&self, item: &Yaml) -> bool {
     match item["tags"].as_vec() {
       Some(item_tags_raw) => {
-        let item_tags: HashSet<&str> = item_tags_raw.iter().map(|t| t.as_str().unwrap()).collect();
-        if let Some(s) = &self.skip_tags {
-          if !s.is_disjoint(&item_tags) {
-            return true;
-          }
+        if item_tags_raw.is_empty() {
+          return false;
         }
-        if let Some(t) = &self.tags {
-          if item_tags.contains("never") && !t.contains("never") {
-            return true;
-          }
-          if !t.is_disjoint(&item_tags) {
-            return false;
-          }
+
+        let item_tags: HashSet<String> = item_tags_raw.iter().map(|t| t.clone().into_string().unwrap()).collect();
+
+        if !self.skip_tags.is_disjoint(&item_tags) {
+          return true;
         }
+
+        if item_tags.contains("never") && !self.tags.contains("never") {
+          return true;
+        }
+        if !self.tags.is_disjoint(&item_tags) {
+          return false;
+        }
+
         if item_tags.contains("always") {
           return false;
         }
         if item_tags.contains("never") {
           return true;
         }
-        self.tags.is_some()
+        true
       }
-      None => self.tags.is_some(),
+      None => false,
     }
   }
 }
@@ -62,16 +63,13 @@ pub fn list_benchmark_file_tasks(benchmark_file: &str, tags: &Tags) {
 
   println!();
 
-  if let Some(tags) = &tags.tags {
-    let mut tags: Vec<_> = tags.iter().collect();
-    tags.sort();
-    println!("{:width$} {:width2$?}", "Tags".green(), &tags, width = 15, width2 = 25);
-  }
-  if let Some(tags) = &tags.skip_tags {
-    let mut tags: Vec<_> = tags.iter().collect();
-    tags.sort();
-    println!("{:width$} {:width2$?}", "Skip-Tags".green(), &tags, width = 15, width2 = 25);
-  }
+  let mut include_tags: Vec<_> = tags.tags.iter().collect();
+  include_tags.sort();
+  println!("{:width$} {:width2$?}", "Tags".green(), &tags, width = 15, width2 = 25);
+
+  let mut skip_tags: Vec<_> = tags.skip_tags.iter().collect();
+  skip_tags.sort();
+  println!("{:width$} {:width2$?}", "Skip-Tags".green(), &tags, width = 15, width2 = 25);
 
   let items: Vec<_> = items.iter().filter(|item| !tags.should_skip_item(item)).collect();
 
@@ -126,102 +124,102 @@ mod tests {
   #[test]
   #[should_panic]
   fn same_tags_and_skip_tags() {
-    let _ = Tags::new(Some("tag1"), Some("tag1"));
+    let _ = Tags::new(vec!["tag1".into()], vec!["tag1".into()]);
   }
 
   #[test]
   fn empty_tags_both() {
     let item = str_to_yaml("---\nname: foo\nrequest:\n  url: /");
-    let tags = Tags::new(None, None);
+    let tags = Tags::new(vec![], vec![]);
     assert!(!tags.should_skip_item(&item));
   }
 
   #[test]
   fn empty_tags() {
-    let tags = Tags::new(None, None);
+    let tags = Tags::new(vec![], vec![]);
     assert!(!tags.should_skip_item(&prepare_default_item()));
   }
 
   #[test]
   fn tags_contains() {
-    let tags = Tags::new(Some("tag1"), None);
+    let tags = Tags::new(vec!["tag1".into()], vec![]);
     assert!(!tags.should_skip_item(&prepare_default_item()));
   }
 
   #[test]
   fn tags_contains_second() {
-    let tags = Tags::new(Some("tag2"), None);
+    let tags = Tags::new(vec!["tag2".into()], vec![]);
     assert!(!tags.should_skip_item(&prepare_default_item()));
   }
 
   #[test]
   fn tags_contains_both() {
-    let tags = Tags::new(Some("tag1,tag2"), None);
+    let tags = Tags::new(vec!["tag1".into(), "tag2".into()], vec![]);
     assert!(!tags.should_skip_item(&prepare_default_item()));
   }
 
   #[test]
   fn tags_not_contains() {
-    let tags = Tags::new(Some("tag99"), None);
+    let tags = Tags::new(vec!["tag99".into()], vec![]);
     assert!(tags.should_skip_item(&prepare_default_item()));
   }
 
   #[test]
   fn skip_tags_not_contains() {
-    let tags = Tags::new(None, Some("tag99"));
+    let tags = Tags::new(vec![], vec!["tag99".into()]);
     assert!(!tags.should_skip_item(&prepare_default_item()));
   }
 
   #[test]
   fn skip_tags_contains() {
-    let tags = Tags::new(None, Some("tag1"));
+    let tags = Tags::new(vec![], vec!["tag1".into()]);
     assert!(tags.should_skip_item(&prepare_default_item()));
   }
 
   #[test]
   fn skip_tags_contains_second() {
-    let tags = Tags::new(None, Some("tag2"));
+    let tags = Tags::new(vec![], vec!["tag2".into()]);
     assert!(tags.should_skip_item(&prepare_default_item()));
   }
 
   #[test]
   fn tags_contains_but_also_skip_tags_contains() {
-    let tags = Tags::new(Some("tag1"), Some("tag2"));
+    let tags = Tags::new(vec!["tag1".into()], vec!["tag2".into()]);
     assert!(tags.should_skip_item(&prepare_default_item()));
   }
 
   #[test]
   fn never_skipped_by_default() {
     let item = str_to_yaml("---\nname: foo\nrequest:\n  url: /\ntags:\n  - never\n  - tag2");
-    let tags = Tags::new(None, None);
+    let tags = Tags::new(vec![], vec![]);
     assert!(tags.should_skip_item(&item));
   }
 
   #[test]
   fn never_tag_skipped_even_when_other_tag_included() {
     let item = str_to_yaml("---\nname: foo\nrequest:\n  url: /\ntags:\n  - never\n  - tag2");
-    let tags = Tags::new(Some("tag2"), None);
+    let tags = Tags::new(vec!["tag2".into()], vec![]);
     assert!(tags.should_skip_item(&item));
   }
 
   #[test]
   fn include_never_tag() {
     let item = str_to_yaml("---\nname: foo\nrequest:\n  url: /\ntags:\n  - never\n  - tag2");
-    let tags = Tags::new(Some("never"), None);
+    let tags = Tags::new(vec!["never".into()], vec![]);
     assert!(!tags.should_skip_item(&item));
   }
 
   #[test]
   fn always_tag_included_by_default() {
     let item = str_to_yaml("---\nname: foo\nrequest:\n  url: /\ntags:\n  - always\n  - tag2");
-    let tags = Tags::new(Some("tag99"), None);
+    let tags = Tags::new(vec!["tag99".into()], vec![]);
     assert!(!tags.should_skip_item(&item));
   }
 
   #[test]
   fn skip_always_tag() {
     let item = str_to_yaml("---\nname: foo\nrequest:\n  url: /\ntags:\n  - always\n  - tag2");
-    let tags = Tags::new(None, Some("always"));
+    let tags = Tags::new(vec![], vec!["always".into()]);
     assert!(tags.should_skip_item(&item));
   }
 }
