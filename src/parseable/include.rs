@@ -42,6 +42,7 @@ pub fn parse_from_filepath(parent_path: &str, benchmark: &mut Benchmark, accesso
     }
 
     if tags.should_skip_item(item) {
+      println!("skipping...");
       continue;
     }
 
@@ -66,7 +67,7 @@ mod tests {
     let doc = &docs[0];
     let mut benchmark: Benchmark = Benchmark::new();
 
-    parse("example/benchmark.yml", doc, &mut benchmark, &Tags::new(None, None));
+    parse("example/benchmark.yml", doc, &mut benchmark, &Tags::new(vec![], vec![]));
 
     assert!(is_that_you(doc));
     assert_eq!(benchmark.len(), 2);
@@ -80,6 +81,6 @@ mod tests {
     let doc = &docs[0];
     let mut benchmark: Benchmark = Benchmark::new();
 
-    parse("example/benchmark.yml", doc, &mut benchmark, &Tags::new(None, None));
+    parse("example/benchmark.yml", doc, &mut benchmark, &Tags::new(vec![], vec![]));
   }
 }
