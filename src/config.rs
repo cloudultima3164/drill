@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use yaml_rust::{Yaml, YamlLoader};
 
+use crate::args::FlattenedCli;
 use crate::benchmark::Context;
 use crate::interpolator;
 use crate::reader;
@@ -24,20 +25,52 @@ pub struct Config {
 }
 
 impl Config {
-  pub fn new(path: &str, relaxed_interpolations: bool, no_check_certificate: bool, quiet: bool, nanosec: bool, timeout: u64, verbose: bool) -> Config {
-    let config_file = reader::read_file(path);
+  pub fn new(
+    args: &FlattenedCli,
+    mut env: BTreeMap<String, String>,
+  ) -> Config {
+    let config_file =
+      reader::read_file(&args.benchmark_file);
 
-    let config_docs = YamlLoader::load_from_str(config_file.as_str()).unwrap();
+    let config_docs =
+      YamlLoader::load_from_str(config_file.as_str())
+        .unwrap();
     let config_doc = &config_docs[0];
 
     let context: Context = Context::new();
-    let interpolator = interpolator::Interpolator::new(&context);
+    let interpolator =
+      interpolator::Interpolator::new(&context);
 
-    let iterations = read_i64_configuration(config_doc, &interpolator, "iterations", NITERATIONS);
-    let concurrency = read_i64_configuration(config_doc, &interpolator, "concurrency", iterations);
-    let rampup = read_i64_configuration(config_doc, &interpolator, "rampup", NRAMPUP);
-    let urls = read_hash_configuration(config_doc, &interpolator, "urls");
-    let global = read_hash_configuration(config_doc, &interpolator, "global");
+    let iterations = read_i64_configuration(
+      config_doc,
+      &interpolator,
+      "iterations",
+      NITERATIONS,
+    );
+    let concurrency = read_i64_configuration(
+      config_doc,
+      &interpolator,
+      "concurrency",
+      iterations,
+    );
+    let rampup = read_i64_configuration(
+      config_doc,
+      &interpolator,
+      "rampup",
+      NRAMPUP,
+    );
+    let urls = read_hash_configuration(
+      config_doc,
+      &interpolator,
+      "urls",
+    );
+    let mut global = read_hash_configuration(
+      config_doc,
+      &interpolator,
+      "global",
+    );
+
+    global.append(&mut env);
 
     if concurrency > iterations {
       panic!("The concurrency can not be higher than the number of iterations")
@@ -48,19 +81,27 @@ impl Config {
       global,
       concurrency,
       iterations,
-      relaxed_interpolations,
-      no_check_certificate,
+      relaxed_interpolations: args.relaxed_interpolations,
+      no_check_certificate: args.no_check_certificate,
       rampup,
-      quiet,
-      nanosec,
-      timeout,
-      verbose,
+      quiet: args.quiet,
+      nanosec: args.nanosec,
+      timeout: args
+        .timeout
+        .as_ref()
+        .map_or(10, |t| t.parse().unwrap_or(10)),
+      verbose: args.verbose,
     }
   }
 }
 
 #[allow(dead_code)]
-fn read_str_configuration(config_doc: &Yaml, interpolator: &interpolator::Interpolator, name: &str, default: &str) -> String {
+fn read_str_configuration(
+  config_doc: &Yaml,
+  interpolator: &interpolator::Interpolator,
+  name: &str,
+  default: &str,
+) -> String {
   match config_doc[name].as_str() {
     Some(value) => {
       if value.contains('{') {
@@ -80,8 +121,14 @@ fn read_str_configuration(config_doc: &Yaml, interpolator: &interpolator::Interp
   }
 }
 
-fn read_i64_configuration(config_doc: &Yaml, interpolator: &interpolator::Interpolator, name: &str, default: i64) -> i64 {
-  let value = if let Some(value) = config_doc[name].as_i64() {
+fn read_i64_configuration(
+  config_doc: &Yaml,
+  interpolator: &interpolator::Interpolator,
+  name: &str,
+  default: i64,
+) -> i64 {
+  let value = if let Some(value) = config_doc[name].as_i64()
+  {
     Some(value)
   } else if let Some(key) = config_doc[name].as_str() {
     interpolator.resolve(key).parse::<i64>().ok()
@@ -109,7 +156,11 @@ fn read_i64_configuration(config_doc: &Yaml, interpolator: &interpolator::Interp
   }
 }
 
-fn read_hash_configuration(config_doc: &Yaml, interpolator: &interpolator::Interpolator, name: &str) -> BTreeMap<String, String> {
+fn read_hash_configuration(
+  config_doc: &Yaml,
+  interpolator: &interpolator::Interpolator,
+  name: &str,
+) -> BTreeMap<String, String> {
   match config_doc[name].as_hash() {
     Some(map) => map
       .iter()
