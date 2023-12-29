@@ -1,7 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
-use std::fs::File;
-use std::io::Read;
-use std::path::Path;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -75,8 +72,7 @@ pub fn execute(
   args: &FlattenedCli,
   tags: &Tags,
 ) -> BenchmarkResult {
-  let env_contents = get_env_file(&args.benchmark_file);
-  let config = Arc::new(Config::new(args, env_contents));
+  let config = Arc::new(Config::new(args));
 
   if args.verbose {
     if args.report_path_option.is_some() {
@@ -186,42 +182,4 @@ pub fn execute(
       }
     }
   })
-}
-
-fn get_env_file(
-  benchmark_file: &str,
-) -> BTreeMap<String, String> {
-  let env_file =
-    Path::new(benchmark_file).with_file_name(".env");
-  if let Ok(true) = env_file.try_exists() {
-    let mut buffer = String::new();
-    if let Ok(mut file) = File::open(env_file) {
-      if file.read_to_string(&mut buffer).is_err() {
-        return BTreeMap::new();
-      };
-    }
-    buffer
-      .lines()
-      .map(|s| {
-        s.split_once('=')
-          .map(|(k, v)| (k.to_owned(), v.to_owned()))
-          .or_else(|| {
-            let mut split = s.split_whitespace();
-            Some((
-              split
-                .next()
-                .expect(".env key before whitespace")
-                .to_owned(),
-              split
-                .next()
-                .expect(".env value after whitespace")
-                .to_owned(),
-            ))
-          })
-          .unwrap()
-      })
-      .collect::<BTreeMap<String, String>>()
-  } else {
-    BTreeMap::new()
-  }
 }

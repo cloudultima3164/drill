@@ -1,4 +1,8 @@
 use std::collections::BTreeMap;
+use std::fs::File;
+use std::io::Read;
+use std::path::Path;
+use std::path::PathBuf;
 
 use yaml_rust::{Yaml, YamlLoader};
 
@@ -25,10 +29,7 @@ pub struct Config {
 }
 
 impl Config {
-  pub fn new(
-    args: &FlattenedCli,
-    mut env: BTreeMap<String, String>,
-  ) -> Config {
+  pub fn new(args: &FlattenedCli) -> Config {
     let config_file =
       reader::read_file(&args.benchmark_file);
 
@@ -40,6 +41,15 @@ impl Config {
     let context: Context = Context::new();
     let interpolator =
       interpolator::Interpolator::new(&context);
+
+    let env_file = Path::new(&read_str_configuration(
+      config_doc,
+      &interpolator,
+      "env",
+      ".env",
+    ))
+    .with_file_name(".env");
+    let mut env_contents = get_env(env_file);
 
     let iterations = read_i64_configuration(
       config_doc,
@@ -70,7 +80,7 @@ impl Config {
       "global",
     );
 
-    global.append(&mut env);
+    global.append(&mut env_contents);
 
     if concurrency > iterations {
       panic!("The concurrency can not be higher than the number of iterations")
@@ -174,5 +184,39 @@ fn read_hash_configuration(
       })
       .collect(),
     None => BTreeMap::new(),
+  }
+}
+
+fn get_env(env_file: PathBuf) -> BTreeMap<String, String> {
+  if let Ok(true) = env_file.try_exists() {
+    let mut buffer = String::new();
+    if let Ok(mut file) = File::open(env_file) {
+      if file.read_to_string(&mut buffer).is_err() {
+        return BTreeMap::new();
+      };
+    }
+    buffer
+      .lines()
+      .map(|s| {
+        s.split_once('=')
+          .map(|(k, v)| (k.to_owned(), v.to_owned()))
+          .or_else(|| {
+            let mut split = s.split_whitespace();
+            Some((
+              split
+                .next()
+                .expect(".env key before whitespace")
+                .to_owned(),
+              split
+                .next()
+                .expect(".env value after whitespace")
+                .to_owned(),
+            ))
+          })
+          .unwrap()
+      })
+      .collect::<BTreeMap<String, String>>()
+  } else {
+    BTreeMap::new()
   }
 }
