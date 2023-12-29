@@ -18,8 +18,8 @@ pub struct Assert {
 
 impl Assert {
   pub fn new(name: String, item: &Yaml) -> Assert {
-    let key = extract(&item, "key");
-    let value = extract(&item, "value");
+    let key = extract(item, "key");
+    let value = extract(item, "value");
 
     Assert {
       name,
@@ -31,15 +31,28 @@ impl Assert {
 
 #[async_trait]
 impl Runnable for Assert {
-  async fn execute(&self, context: &mut Context, _reports: &mut Reports, _pool: &Pool, config: &Config) {
-    let interpolator = interpolator::Interpolator::new(context);
+  async fn execute(
+    &self,
+    context: &mut Context,
+    _reports: &mut Reports,
+    _pool: &Pool,
+    config: &Config,
+  ) {
+    let interpolator =
+      interpolator::Interpolator::new(context);
     let eval = format!("{{{{ {} }}}}", &self.key);
     let lhs = interpolator.resolve(&eval);
     let comparable = interpolator.resolve(&self.value);
     let rhs = json!(comparable);
 
     if !config.quiet {
-      println!("{:width$} {}={}", self.name.green(), self.key.cyan().bold(), comparable.magenta(), width = 25);
+      println!(
+        "{:width$} {}={}",
+        self.name.green(),
+        self.key.cyan().bold(),
+        comparable.magenta(),
+        width = 25
+      );
     }
 
     if !lhs.eq(&rhs) {
@@ -47,7 +60,11 @@ impl Runnable for Assert {
     }
 
     if !config.quiet {
-      println!("{:width$}", "Assertion successful".red(), width = 25);
+      println!(
+        "{:width$}",
+        "Assertion successful".red(),
+        width = 25
+      );
     }
   }
 }

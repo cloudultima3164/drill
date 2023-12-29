@@ -18,8 +18,12 @@ pub struct Exec {
 }
 
 impl Exec {
-  pub fn new(name: String, assign: Option<String>, item: &Yaml) -> Exec {
-    let command = extract(&item, "command");
+  pub fn new(
+    name: String,
+    assign: Option<String>,
+    item: &Yaml,
+  ) -> Exec {
+    let command = extract(item, "command");
 
     Exec {
       name,
@@ -31,18 +35,35 @@ impl Exec {
 
 #[async_trait]
 impl Runnable for Exec {
-  async fn execute(&self, context: &mut Context, _reports: &mut Reports, _pool: &Pool, config: &Config) {
+  async fn execute(
+    &self,
+    context: &mut Context,
+    _reports: &mut Reports,
+    _pool: &Pool,
+    config: &Config,
+  ) {
     if !config.quiet {
-      println!("{:width$} {}", self.name.green(), self.command.cyan().bold(), width = 25);
+      println!(
+        "{:width$} {}",
+        self.name.green(),
+        self.command.cyan().bold(),
+        width = 25
+      );
     }
 
-    let final_command = interpolator::Interpolator::new(context).resolve(&self.command);
+    let final_command =
+      interpolator::Interpolator::new(context)
+        .resolve(&self.command);
 
-    let args = vec!["bash", "-c", "--", final_command.as_str()];
+    let args = ["bash", "-c", "--", final_command.as_str()];
 
-    let execution = Command::new(args[0]).args(&args[1..]).output().expect("Couldn't run it");
+    let execution = Command::new(args[0])
+      .args(&args[1..])
+      .output()
+      .expect("Couldn't run it");
 
-    let output: String = String::from_utf8_lossy(&execution.stdout).into();
+    let output: String =
+      String::from_utf8_lossy(&execution.stdout).into();
     let output = output.trim_end().to_string();
 
     if let Some(ref key) = self.assign {
