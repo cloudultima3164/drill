@@ -11,6 +11,7 @@ mod request;
 
 pub use self::assert::Assert;
 pub use self::assign::Assign;
+pub use self::db_query::DbQuery;
 pub use self::delay::Delay;
 pub use self::exec::Exec;
 pub use self::request::Request;
@@ -22,7 +23,13 @@ use std::fmt;
 
 #[async_trait]
 pub trait Runnable {
-  async fn execute(&self, context: &mut Context, reports: &mut Reports, pool: &Pool, config: &Config);
+  async fn execute(
+    &self,
+    context: &mut Context,
+    reports: &mut Reports,
+    pool: &Pool,
+    config: &Config,
+  );
 }
 
 #[derive(Deserialize)]
@@ -39,7 +46,13 @@ pub enum WithOps {
 
 impl From<&str> for WithOps {
   fn from(value: &str) -> Self {
-    serde_json::from_value(serde_json::Value::String(value.to_owned())).map_err(|_| format!("Unknown 'with' attribute, {value}")).unwrap()
+    serde_json::from_value(serde_json::Value::String(
+      value.to_owned(),
+    ))
+    .map_err(|_| {
+      format!("Unknown 'with' attribute, {value}")
+    })
+    .unwrap()
   }
 }
 
@@ -52,27 +65,44 @@ pub struct Report {
 
 impl fmt::Debug for Report {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, "\n- name: {}\n  duration: {}\n", self.name, self.duration)
+    write!(
+      f,
+      "\n- name: {}\n  duration: {}\n",
+      self.name, self.duration
+    )
   }
 }
 
 impl fmt::Display for Report {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, "\n- name: {}\n  duration: {}\n  status: {}\n", self.name, self.duration, self.status)
+    write!(
+      f,
+      "\n- name: {}\n  duration: {}\n  status: {}\n",
+      self.name, self.duration, self.status
+    )
   }
 }
 
-pub fn extract_optional<'a>(item: &'a Yaml, attr: &'a str) -> Option<String> {
+pub fn extract_optional<'a>(
+  item: &'a Yaml,
+  attr: &'a str,
+) -> Option<String> {
   if let Some(s) = item[attr].as_str() {
     Some(s.to_string())
   } else if item[attr].as_hash().is_some() {
-    panic!("`{}` needs to be a string. Try adding quotes", attr);
+    panic!(
+      "`{}` needs to be a string. Try adding quotes",
+      attr
+    );
   } else {
     None
   }
 }
 
-pub fn extract<'a>(item: &'a Yaml, attr: &'a str) -> String {
+pub fn extract<'a>(
+  item: &'a Yaml,
+  attr: &'a str,
+) -> String {
   if let Some(s) = item[attr].as_i64() {
     s.to_string()
   } else if let Some(s) = item[attr].as_str() {

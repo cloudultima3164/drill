@@ -8,7 +8,9 @@ use yaml_rust::{Yaml, YamlLoader};
 
 use crate::args::FlattenedCli;
 use crate::benchmark::Context;
+use crate::db::DbDefinition;
 use crate::interpolator;
+use crate::interpolator::Interpolator;
 use crate::reader;
 
 const NITERATIONS: i64 = 1;
@@ -17,6 +19,7 @@ const NRAMPUP: i64 = 0;
 pub struct Config {
   pub urls: BTreeMap<String, String>,
   pub global: BTreeMap<String, String>,
+  pub dbs: BTreeMap<String, DbDefinition>,
   pub concurrency: i64,
   pub iterations: i64,
   pub relaxed_interpolations: bool,
@@ -39,8 +42,7 @@ impl Config {
     let config_doc = &config_docs[0];
 
     let context: Context = Context::new();
-    let interpolator =
-      interpolator::Interpolator::new(&context);
+    let interpolator = Interpolator::new(&context);
 
     let env_file = Path::new(&read_str_configuration(
       config_doc,
@@ -69,18 +71,24 @@ impl Config {
       "rampup",
       NRAMPUP,
     );
-    let urls = read_hash_configuration(
-      config_doc,
-      &interpolator,
-      "urls",
-    );
-    let mut global = read_hash_configuration(
-      config_doc,
-      &interpolator,
-      "global",
-    );
+    let urls = read_hash_configuration(config_doc, "urls")
+      .into_iter()
+      .map(|(k, v)| (k, v.as_str().unwrap().to_owned()))
+      .collect::<BTreeMap<String, String>>();
+
+    let mut global =
+      read_hash_configuration(config_doc, "global")
+        .into_iter()
+        .map(|(k, v)| (k, v.as_str().unwrap().to_owned()))
+        .collect::<BTreeMap<String, String>>();
 
     global.append(&mut env_contents);
+
+    let dbs =
+      read_hash_configuration(config_doc, "database")
+        .into_iter()
+        .map(|(name, def)| (name, DbDefinition::from(def)))
+        .collect();
 
     if concurrency > iterations {
       panic!("The concurrency can not be higher than the number of iterations")
@@ -89,6 +97,7 @@ impl Config {
     Config {
       urls,
       global,
+      dbs,
       concurrency,
       iterations,
       relaxed_interpolations: args.relaxed_interpolations,
@@ -166,20 +175,15 @@ fn read_i64_configuration(
   }
 }
 
-fn read_hash_configuration(
-  config_doc: &Yaml,
-  interpolator: &interpolator::Interpolator,
+fn read_hash_configuration<'a>(
+  config_doc: &'a Yaml,
   name: &str,
-) -> BTreeMap<String, String> {
+) -> BTreeMap<String, &'a Yaml> {
   match config_doc[name].as_hash() {
     Some(map) => map
       .iter()
       .map(|(key, val)| {
         let key = key.as_str().unwrap().to_owned();
-        let mut val = val.as_str().unwrap().to_owned();
-        if val.contains('{') {
-          val = interpolator.resolve(&val);
-        }
         (key, val)
       })
       .collect(),

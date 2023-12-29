@@ -2,13 +2,13 @@ use std::convert::TryFrom;
 
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum Op {
   Include,
   Assert,
   Assign,
-  // DbQuery,
+  DbQuery,
   Delay,
   Exec,
   Request,

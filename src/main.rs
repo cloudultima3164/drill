@@ -3,6 +3,7 @@ mod args;
 mod benchmark;
 mod checker;
 mod config;
+mod db;
 mod interpolator;
 mod parse;
 mod reader;
