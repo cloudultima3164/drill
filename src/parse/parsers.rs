@@ -4,7 +4,9 @@ use yaml_rust::Yaml;
 
 use super::{Parse, ParserArgs};
 use crate::{
-  actions::{Assert, Assign, Delay, Exec, Request},
+  actions::{
+    Assert, Assign, DbQuery, Delay, Exec, Request,
+  },
   benchmark::Benchmark,
   tags::Tags,
 };
@@ -171,5 +173,38 @@ impl<'a> Parse for IncludeParser<'a> {
     let final_path = include_filepath.to_str().unwrap();
 
     walk(final_path, benchmark, None, self.0);
+  }
+}
+pub struct DbQueryParser;
+
+pub struct DbQueryArgs {
+  name: String,
+  assign: Option<String>,
+}
+
+impl<'a> From<ParserArgs<'a>> for DbQueryArgs {
+  fn from(value: ParserArgs<'a>) -> Self {
+    Self {
+      name: value.name,
+      assign: value.assign,
+    }
+  }
+}
+
+impl Parse for DbQueryParser {
+  type Args = DbQueryArgs;
+
+  fn parse(
+    &self,
+    item: &Yaml,
+    benchmark: &mut crate::benchmark::Benchmark,
+    args: Self::Args,
+  ) {
+    benchmark.push(Box::new(DbQuery::new(
+      args.name.clone(),
+      args.assign.clone(),
+      item,
+      None,
+    )));
   }
 }

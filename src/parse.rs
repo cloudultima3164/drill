@@ -16,8 +16,9 @@ use self::{
   op::Op,
   parsers::{
     AssertArgs, AssertParser, AssignArgs, AssignParser,
-    DelayArgs, DelayParser, ExecArgs, ExecParser,
-    IncludeArgs, IncludeParser, RequestArgs, RequestParser,
+    DbQueryArgs, DbQueryParser, DelayArgs, DelayParser,
+    ExecArgs, ExecParser, IncludeArgs, IncludeParser,
+    RequestArgs, RequestParser,
   },
 };
 
@@ -42,16 +43,26 @@ pub fn walk(
     let parser_args =
       ParserArgs::new(name, assign, parent_path);
 
-    let (op, target_value) = item
+    let mut op_iter = item
       .as_hash()
       .unwrap()
       .into_iter()
-      .find_map(|(key, val)| {
+      .filter_map(|(key, val)| {
         Op::try_from(key.as_str().unwrap())
           .ok()
           .map(|parsed_key| (parsed_key, val))
       })
-      .expect("No actionable keys found in item");
+      .rev();
+
+    let (op, target_value) = if op_iter.clone().count() > 1
+    {
+      op_iter.find_map(|(op, val)| {
+        op.ne(&Op::Assign).then_some((op, val))
+      })
+    } else {
+      op_iter.next()
+    }
+    .expect("No actionable keys found in item");
 
     parse(op, target_value, benchmark, parser_args, tags)
   }
@@ -91,6 +102,10 @@ fn parse<'a>(
       RequestArgs::from(args),
     )
     .parse(item, benchmark),
+    Op::DbQuery => {
+      Parser::new(DbQueryParser, DbQueryArgs::from(args))
+        .parse(item, benchmark)
+    }
   }
 }
 

@@ -1,0 +1,15 @@
+services:
+  postgres:
+    container_name: "example_db"
+    image: postgres:alpine
+    volumes:
+      - ./initdb:/docker-entrypoint-initdb.d
+    environment:
+      - POSTGRES_USER
+      - POSTGRES_PASSWORD
+      - POSTGRES_DB
+    ports:
+      - 5432:5432
+volumes:
+  database:
+    driver: local

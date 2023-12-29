@@ -8,7 +8,9 @@ use serde_json::{json, Map, Value};
 use tokio::{runtime, time::sleep};
 
 use crate::actions::{Report, Runnable};
+use crate::args::FlattenedCli;
 use crate::config::Config;
+
 use crate::parse::walk;
 use crate::tags::Tags;
 use crate::writer;
@@ -67,30 +69,14 @@ fn join<S: ToString>(l: Vec<S>, sep: &str) -> String {
   )
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn execute(
-  benchmark_path: &str,
-  report_path_option: Option<&str>,
-  relaxed_interpolations: bool,
-  no_check_certificate: bool,
-  quiet: bool,
-  nanosec: bool,
-  timeout: Option<&str>,
-  verbose: bool,
+  args: &FlattenedCli,
   tags: &Tags,
 ) -> BenchmarkResult {
-  let config = Arc::new(Config::new(
-    benchmark_path,
-    relaxed_interpolations,
-    no_check_certificate,
-    quiet,
-    nanosec,
-    timeout.map_or(10, |t| t.parse().unwrap_or(10)),
-    verbose,
-  ));
+  let config = Arc::new(Config::new(args));
 
-  if verbose {
-    if report_path_option.is_some() {
+  if args.verbose {
+    if args.report_path_option.is_some() {
       println!(
         "{}: {}. Ignoring {} and {} properties...",
         "Report mode".yellow(),
@@ -143,7 +129,7 @@ pub fn execute(
     let pool_store: PoolStore = PoolStore::new();
 
     walk(
-      benchmark_path,
+      &args.benchmark_file,
       &mut benchmark,
       Some("plan"),
       tags,
@@ -157,7 +143,7 @@ pub fn execute(
     let benchmark = Arc::new(benchmark);
     let pool = Arc::new(Mutex::new(pool_store));
 
-    if let Some(report_path) = report_path_option {
+    if let Some(ref report_path) = args.report_path_option {
       let reports = run_iteration(
         benchmark.clone(),
         pool.clone(),

@@ -1,0 +1,24 @@
+---
+urls: 
+  jisho: http://jisho.org/api/v1/search/
+  echo: https://postman-echo.com/
+global:
+  KEYWORD: "食"
+
+plan:
+  - name: Search a word
+    assign: jisho_result
+    request:
+      base: jisho
+      url: words?keyword={{ keyword }}
+      with_items:
+        - { keyword: 食 }
+  - name: Echo result
+    assign: echo_result
+    request:
+      base: echo
+      url: get?keyword={{ jisho_result.body.data[0].slug }}
+  - name: Assert result
+    assert:
+      key: echo_result.body.args.keyword
+      value: "{{ KEYWORD }}"

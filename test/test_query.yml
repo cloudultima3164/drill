@@ -1,0 +1,37 @@
+---
+# Set custom .env path. Default is to search
+# in the current folder
+env: <SET YOUR OWN REPO PATH>/drill/test/example_db/.env
+database:
+  example_db0:
+    # Specify each parameter separately; the app will build the connection string
+    type: postgres
+    host: "{{ POSTGRES_HOST }}"
+    port: "{{ POSTGRES_PORT }}"
+    user: "{{ POSTGRES_USER }}"
+    password: "{{ POSTGRES_PASSWORD }}"
+    dbname: "{{ POSTGRES_DB }}"
+  example_db1:
+    # Directly pass the connection string
+    connection_string: "postgres://{{ POSTGRES_USER }}:{{ POSTGRES_PASSWORD }}@{{ POSTGRES_HOST }}:{{ POSTGRES_PORT }}/{{ POSTGRES_DB }}"
+plan:
+  - name: Query the DB
+    assign: db_result0
+    db-query:
+      target: example_db0
+      query: "select * from public.example_table"
+  - name: Query the other DB
+    assign: db_result1
+    db-query:
+      target: example_db1
+      query: "select * from public.example_table"
+  - name: Assert 1
+    assert:
+      key: db_result0[0].code
+      value: 14378432
+  - name: Assert 2
+    assert:
+      key: db_result0[2].repr_name
+      value: buttercup
+
+

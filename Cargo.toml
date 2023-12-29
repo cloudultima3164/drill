@@ -1,6 +1,6 @@
 [package]
 name = "drill"
-version = "0.8.3"
+version = "0.9.0"
 authors = ["Ferran Basora <fcsonline@gmail.com>"]
 description = "Drill is a HTTP load testing application written in Rust inspired by Ansible syntax"
 repository = "https://github.com/fcsonline/drill"
@@ -9,7 +9,7 @@ license = "GPL-3.0"
 edition = "2018"
 
 [dependencies]
-clap = "2.32.0"
+clap = { version = "4.4.0", features = ["derive"] }
 colored = "2.0.0"
 csv = "1.0.5"
 regex = "1.5.5"
@@ -30,6 +30,7 @@ hdrhistogram = "7.4.0"
 # Add openssl-sys as a direct dependency so it can be cross compiled to
 # x86_64-unknown-linux-musl using the "vendored" feature below
 openssl-sys = "0.9.66"
+sqlx = { version = "0.7.3", features = ["runtime-tokio", "postgres"] }
 
 [features]
 # Force openssl-sys to statically link in the openssl library. Necessary when

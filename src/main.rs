@@ -3,6 +3,7 @@ mod args;
 mod benchmark;
 mod checker;
 mod config;
+mod db;
 mod interpolator;
 mod parse;
 mod reader;
@@ -42,17 +43,7 @@ fn main() {
     process::exit(0);
   };
 
-  let benchmark_result = benchmark::execute(
-    &args.benchmark_file,
-    args.report_path_option.as_deref(),
-    args.relaxed_interpolations,
-    args.no_check_certificate,
-    args.quiet,
-    args.nanosec,
-    args.timeout.as_deref(),
-    args.verbose,
-    &tags,
-  );
+  let benchmark_result = benchmark::execute(&args, &tags);
   let list_reports = benchmark_result.reports;
   let duration = benchmark_result.duration;
 
