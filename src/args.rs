@@ -1,7 +1,12 @@
 use clap::{Args, Parser};
 
 #[derive(Parser)]
-#[command(name = "drill", version = "0.9.0", about = "HTTP load testing application written in Rust inspired by Ansible syntax", rename_all = "kebab-case")]
+#[command(
+  name = "drill",
+  version = "0.9.0",
+  about = "HTTP load testing application written in Rust inspired by Ansible syntax",
+  rename_all = "kebab-case"
+)]
 pub struct Cli {
   /// Sets the benchmark file
   #[arg(required = true)]
@@ -34,7 +39,7 @@ pub struct Cli {
 }
 
 impl Cli {
-  pub fn to_flattened(self) -> FlattenedCli {
+  pub fn into_flattened(self) -> FlattenedCli {
     FlattenedCli {
       benchmark_file: self.benchmark,
       relaxed_interpolations: self.relaxed_interpolations,
@@ -50,7 +55,10 @@ impl Cli {
       report_path_option: self.metrics.report.report,
       list_tags: self.tag_options.list_tags,
       tags: self.tag_options.tag_lists.include_tags,
-      skip_tags_option: self.tag_options.tag_lists.skip_tags,
+      skip_tags_option: self
+        .tag_options
+        .tag_lists
+        .skip_tags,
     }
   }
 }
@@ -100,10 +108,18 @@ pub struct TagOptions {
 #[group(required = false)]
 pub struct TagLists {
   /// Tags to include
-  #[arg(long, use_value_delimiter = true, value_delimiter = ',')]
+  #[arg(
+    long,
+    use_value_delimiter = true,
+    value_delimiter = ','
+  )]
   pub include_tags: Vec<String>,
   /// Tags to exclude
-  #[arg(long, use_value_delimiter = true, value_delimiter = ',')]
+  #[arg(
+    long,
+    use_value_delimiter = true,
+    value_delimiter = ','
+  )]
   pub skip_tags: Vec<String>,
 }
 
