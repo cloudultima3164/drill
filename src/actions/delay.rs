@@ -1,13 +1,11 @@
 use async_trait::async_trait;
 use colored::*;
 use tokio::time::sleep;
-use yaml_rust::Yaml;
 
 use crate::actions::Runnable;
 use crate::benchmark::{Context, Pool, Reports};
 use crate::config::Config;
 
-use std::convert::TryFrom;
 use std::time::Duration;
 
 #[derive(Clone)]
@@ -17,10 +15,8 @@ pub struct Delay {
 }
 
 impl Delay {
-  pub fn new(name: String, item: &Yaml) -> Delay {
-    let seconds = u64::try_from(item["seconds"].as_i64().unwrap()).expect("Invalid number of seconds");
-
-    Delay {
+  pub fn new(name: String, seconds: u64) -> Self {
+    Self {
       name,
       seconds,
     }
@@ -29,11 +25,23 @@ impl Delay {
 
 #[async_trait]
 impl Runnable for Delay {
-  async fn execute(&self, _context: &mut Context, _reports: &mut Reports, _pool: &Pool, config: &Config) {
+  async fn execute(
+    &self,
+    _context: &mut Context,
+    _reports: &mut Reports,
+    _pool: &Pool,
+    config: &Config,
+  ) {
     sleep(Duration::from_secs(self.seconds)).await;
 
     if !config.quiet {
-      println!("{:width$} {}{}", self.name.green(), self.seconds.to_string().cyan().bold(), "s".magenta(), width = 25);
+      println!(
+        "{:width$} {}{}",
+        self.name.green(),
+        self.seconds.to_string().cyan().bold(),
+        "s".magenta(),
+        width = 25
+      );
     }
   }
 }

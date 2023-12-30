@@ -30,29 +30,18 @@ fn main() {
     process::exit(0);
   };
 
-  let tags = tags::Tags::new(
-    args.tags.clone(),
-    args.skip_tags_option.clone(),
-  );
+  let tags = tags::Tags::new(args.tags.clone(), args.skip_tags_option.clone());
 
   if args.list_tasks {
-    tags::list_benchmark_file_tasks(
-      &args.benchmark_file,
-      &tags,
-    );
+    tags::list_benchmark_file_tasks(&args.benchmark_file, &tags);
     process::exit(0);
   };
 
-  let benchmark_result = benchmark::execute(&args, &tags);
+  let benchmark_result = benchmark::execute(&args);
   let list_reports = benchmark_result.reports;
   let duration = benchmark_result.duration;
 
-  show_stats(
-    &list_reports,
-    args.stats_option,
-    args.nanosec,
-    duration,
-  );
+  show_stats(&list_reports, args.stats_option, args.nanosec, duration);
   compare_benchmark(
     &list_reports,
     args.compare_path_option.as_deref(),
@@ -86,15 +75,11 @@ impl DrillStats {
 
 fn compute_stats(sub_reports: &[Report]) -> DrillStats {
   let mut hist =
-    Histogram::<u64>::new_with_bounds(1, 60 * 60 * 1000, 2)
-      .unwrap();
+    Histogram::<u64>::new_with_bounds(1, 60 * 60 * 1000, 2).unwrap();
   let mut group_by_status = HashMap::new();
 
   for req in sub_reports {
-    group_by_status
-      .entry(req.status / 100)
-      .or_insert_with(Vec::new)
-      .push(req);
+    group_by_status.entry(req.status / 100).or_insert_with(Vec::new).push(req);
   }
 
   for r in sub_reports.iter() {
@@ -104,8 +89,7 @@ fn compute_stats(sub_reports: &[Report]) -> DrillStats {
   let total_requests = sub_reports.len();
   let successful_requests =
     group_by_status.entry(2).or_insert_with(Vec::new).len();
-  let failed_requests =
-    total_requests - successful_requests;
+  let failed_requests = total_requests - successful_requests;
 
   DrillStats {
     total_requests,
@@ -136,10 +120,7 @@ fn show_stats(
   let mut group_by_name = LinkedHashMap::new();
 
   for req in list_reports.concat() {
-    group_by_name
-      .entry(req.name.clone())
-      .or_insert_with(Vec::new)
-      .push(req);
+    group_by_name.entry(req.name.clone()).or_insert_with(Vec::new).push(req);
   }
 
   // compute stats per name
@@ -174,8 +155,7 @@ fn show_stats(
       "{:width$} {:width2$} {}",
       name.green(),
       "Median time per request".yellow(),
-      format_time(substats.median_duration(), nanosec)
-        .purple(),
+      format_time(substats.median_duration(), nanosec).purple(),
       width = 25,
       width2 = 25
     );
@@ -183,8 +163,7 @@ fn show_stats(
       "{:width$} {:width2$} {}",
       name.green(),
       "Average time per request".yellow(),
-      format_time(substats.mean_duration(), nanosec)
-        .purple(),
+      format_time(substats.mean_duration(), nanosec).purple(),
       width = 25,
       width2 = 25
     );
@@ -192,8 +171,7 @@ fn show_stats(
       "{:width$} {:width2$} {}",
       name.green(),
       "Sample standard deviation".yellow(),
-      format_time(substats.stdev_duration(), nanosec)
-        .purple(),
+      format_time(substats.stdev_duration(), nanosec).purple(),
       width = 25,
       width2 = 25
     );
@@ -201,11 +179,7 @@ fn show_stats(
       "{:width$} {:width2$} {}",
       name.green(),
       "99.0'th percentile".yellow(),
-      format_time(
-        substats.value_at_quantile(0.99),
-        nanosec
-      )
-      .purple(),
+      format_time(substats.value_at_quantile(0.99), nanosec).purple(),
       width = 25,
       width2 = 25
     );
@@ -213,11 +187,7 @@ fn show_stats(
       "{:width$} {:width2$} {}",
       name.green(),
       "99.5'th percentile".yellow(),
-      format_time(
-        substats.value_at_quantile(0.995),
-        nanosec
-      )
-      .purple(),
+      format_time(substats.value_at_quantile(0.995), nanosec).purple(),
       width = 25,
       width2 = 25
     );
@@ -225,11 +195,7 @@ fn show_stats(
       "{:width$} {:width2$} {}",
       name.green(),
       "99.9'th percentile".yellow(),
-      format_time(
-        substats.value_at_quantile(0.999),
-        nanosec
-      )
-      .purple(),
+      format_time(substats.value_at_quantile(0.999), nanosec).purple(),
       width = 25,
       width2 = 25
     );
@@ -238,8 +204,7 @@ fn show_stats(
   // compute global stats
   let allreports = list_reports.concat();
   let global_stats = compute_stats(&allreports);
-  let requests_per_second =
-    global_stats.total_requests as f64 / duration;
+  let requests_per_second = global_stats.total_requests as f64 / duration;
 
   println!();
   println!(
@@ -277,52 +242,37 @@ fn show_stats(
   println!(
     "{:width2$} {}",
     "Median time per request".yellow(),
-    format_time(global_stats.median_duration(), nanosec)
-      .purple(),
+    format_time(global_stats.median_duration(), nanosec).purple(),
     width2 = 25
   );
   println!(
     "{:width2$} {}",
     "Average time per request".yellow(),
-    format_time(global_stats.mean_duration(), nanosec)
-      .purple(),
+    format_time(global_stats.mean_duration(), nanosec).purple(),
     width2 = 25
   );
   println!(
     "{:width2$} {}",
     "Sample standard deviation".yellow(),
-    format_time(global_stats.stdev_duration(), nanosec)
-      .purple(),
+    format_time(global_stats.stdev_duration(), nanosec).purple(),
     width2 = 25
   );
   println!(
     "{:width2$} {}",
     "99.0'th percentile".yellow(),
-    format_time(
-      global_stats.value_at_quantile(0.99),
-      nanosec
-    )
-    .purple(),
+    format_time(global_stats.value_at_quantile(0.99), nanosec).purple(),
     width2 = 25
   );
   println!(
     "{:width2$} {}",
     "99.5'th percentile".yellow(),
-    format_time(
-      global_stats.value_at_quantile(0.995),
-      nanosec
-    )
-    .purple(),
+    format_time(global_stats.value_at_quantile(0.995), nanosec).purple(),
     width2 = 25
   );
   println!(
     "{:width2$} {}",
     "99.9'th percentile".yellow(),
-    format_time(
-      global_stats.value_at_quantile(0.999),
-      nanosec
-    )
-    .purple(),
+    format_time(global_stats.value_at_quantile(0.999), nanosec).purple(),
     width2 = 25
   );
 }
@@ -334,11 +284,8 @@ fn compare_benchmark(
 ) {
   if let Some(compare_path) = compare_path_option {
     if let Some(threshold) = threshold_option {
-      let compare_result = checker::compare(
-        list_reports,
-        compare_path,
-        threshold,
-      );
+      let compare_result =
+        checker::compare(list_reports, compare_path, threshold);
 
       match compare_result {
         Ok(_) => process::exit(0),

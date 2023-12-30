@@ -1,85 +1,76 @@
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
 use std::path::Path;
 
-pub fn read_file(filepath: &str) -> String {
+pub fn get_file<S: AsRef<OsStr> + ?Sized>(filepath: &S) -> File {
   // Create a path to the desired file
   let path = Path::new(filepath);
   let display = path.display();
 
   // Open the path in read-only mode, returns `io::Result<File>`
-  let mut file = match File::open(path) {
-    Err(why) => panic!("couldn't open {}: {}", display, why),
+  match File::open(path) {
+    Err(why) => {
+      panic!("couldn't open {}: {}", display, why)
+    }
     Ok(file) => file,
-  };
+  }
+}
+
+#[allow(dead_code)]
+pub fn read_file<S: AsRef<OsStr> + ?Sized>(filepath: &S) -> String {
+  let mut file = get_file(filepath);
 
   // Read the file contents into a string, returns `io::Result<usize>`
   let mut content = String::new();
   if let Err(why) = file.read_to_string(&mut content) {
-    panic!("couldn't read {}: {}", display, why);
+    panic!("couldn't read {}: {}", filepath.as_ref().to_string_lossy(), why);
   }
 
   content
 }
 
-pub fn read_file_as_yml(filepath: &str) -> Vec<yaml_rust::Yaml> {
-  let content = read_file(filepath);
-  yaml_rust::YamlLoader::load_from_str(content.as_str()).unwrap()
+pub fn read_file_as_yml<S: AsRef<OsStr> + ?Sized>(
+  filepath: &S,
+) -> serde_yaml::Value {
+  serde_yaml::from_reader(get_file(filepath)).unwrap()
 }
 
-pub fn read_yaml_doc_accessor<'a>(doc: &'a yaml_rust::Yaml, accessor: Option<&str>) -> &'a Vec<yaml_rust::Yaml> {
-  if let Some(accessor_id) = accessor {
-    match doc[accessor_id].as_vec() {
-      Some(items) => items,
-      None => {
-        println!("Node missing on config: {accessor_id}");
-        println!("Exiting.");
-        std::process::exit(1)
-      }
+pub fn read_yaml_doc_accessor<'a>(
+  doc: &'a serde_yaml::Value,
+  accessor: &str,
+) -> &'a serde_yaml::Value {
+  match doc.get(accessor) {
+    Some(items) => items,
+    None => {
+      println!("Node missing on config: {accessor}");
+      println!("Exiting.");
+      std::process::exit(1)
     }
-  } else {
-    doc.as_vec().unwrap()
   }
 }
 
-pub fn read_file_as_yml_array(filepath: &str) -> yaml_rust::yaml::Array {
-  let path = Path::new(filepath);
-  let display = path.display();
-
-  let file = match File::open(path) {
-    Err(why) => panic!("couldn't open {}: {}", display, why),
-    Ok(file) => file,
-  };
-
+#[allow(dead_code)]
+pub fn read_file_as_yml_array<S: AsRef<OsStr> + ?Sized>(
+  filepath: &S,
+) -> Vec<serde_yaml::Value> {
+  let file = get_file(filepath);
   let reader = BufReader::new(file);
-  let mut items = yaml_rust::yaml::Array::new();
-  for line in reader.lines() {
-    match line {
-      Ok(text) => {
-        items.push(yaml_rust::Yaml::String(text));
-      }
-      Err(e) => println!("error parsing line: {e:?}"),
-    }
-  }
-
-  items
+  serde_yaml::from_reader(reader).unwrap()
 }
 
-// TODO: Try to split this fn into two
-pub fn read_csv_file_as_yml(filepath: &str, quote: u8) -> yaml_rust::yaml::Array {
-  // Create a path to the desired file
-  let path = Path::new(filepath);
-  let display = path.display();
+pub fn read_csv_file_as_yml<S: AsRef<OsStr> + ?Sized>(
+  filepath: &S,
+  // quote: u8,
+) -> Vec<serde_yaml::Value> {
+  let file = get_file(filepath);
 
-  // Open the path in read-only mode, returns `io::Result<File>`
-  let file = match File::open(path) {
-    Err(why) => panic!("couldn't open {}: {}", display, why),
-    Ok(file) => file,
-  };
+  let mut rdr = csv::ReaderBuilder::new()
+    .has_headers(true)
+    // .quote(quote)
+    .from_reader(file);
 
-  let mut rdr = csv::ReaderBuilder::new().has_headers(true).quote(quote).from_reader(file);
-
-  let mut items = yaml_rust::yaml::Array::new();
+  let mut items = Vec::new();
 
   let headers = match rdr.headers() {
     Err(why) => panic!("error parsing header: {:?}", why),
@@ -89,16 +80,18 @@ pub fn read_csv_file_as_yml(filepath: &str, quote: u8) -> yaml_rust::yaml::Array
   for result in rdr.records() {
     match result {
       Ok(record) => {
-        let mut linked_hash_map = linked_hash_map::LinkedHashMap::new();
+        let yaml_record = headers
+          .iter()
+          .enumerate()
+          .map(|(i, header)| {
+            (
+              serde_yaml::Value::String(header.to_string()),
+              serde_yaml::Value::String(record.get(i).unwrap().to_string()),
+            )
+          })
+          .collect();
 
-        for (i, header) in headers.iter().enumerate() {
-          let item_key = yaml_rust::Yaml::String(header.to_string());
-          let item_value = yaml_rust::Yaml::String(record.get(i).unwrap().to_string());
-
-          linked_hash_map.insert(item_key, item_value);
-        }
-
-        items.push(yaml_rust::Yaml::Hash(linked_hash_map));
+        items.push(serde_yaml::Value::Mapping(yaml_record));
       }
       Err(e) => println!("error parsing header: {e:?}"),
     }
