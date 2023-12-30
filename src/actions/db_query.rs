@@ -1,8 +1,8 @@
-use crate::actions::extract;
 use crate::benchmark::{Context, Pool, Reports};
 use crate::config::Config;
 use crate::db::DB;
 use crate::interpolator;
+use crate::parse::WithItems;
 use async_trait::async_trait;
 use colored::Colorize;
 use serde::ser::{SerializeMap, SerializeSeq};
@@ -10,7 +10,6 @@ use serde::Serialize;
 use serde_json::json;
 use sqlx::postgres::PgRow;
 use sqlx::{Column, Executor, PgPool, Row, ValueRef};
-use yaml_rust::Yaml;
 
 use super::Runnable;
 
@@ -26,13 +25,11 @@ impl DbQuery {
   pub fn new(
     name: String,
     assign: Option<String>,
-    item: &Yaml,
-    _with_item: Option<Yaml>,
-  ) -> DbQuery {
-    let target = extract(item, "target");
-    let query = extract(item, "query");
-
-    DbQuery {
+    target: String,
+    query: String,
+    _with_items: Option<WithItems>,
+  ) -> Self {
+    Self {
       name,
       target,
       query,
@@ -50,14 +47,11 @@ impl Runnable for DbQuery {
     _pool: &Pool,
     config: &Config,
   ) {
-    let interpolator =
-      interpolator::Interpolator::new(context);
+    let interpolator = interpolator::Interpolator::new(context);
     let db = config
       .dbs
       .get(&self.target)
-      .unwrap_or_else(|| {
-        panic!("No such DB: {}", self.target)
-      })
+      .unwrap_or_else(|| panic!("No such DB: {}", self.target))
       .to_db(&interpolator);
     if !config.quiet {
       println!(
@@ -85,21 +79,15 @@ impl Runnable for DbQuery {
       ),
     };
 
-    if let Some(ref key) = self.assign {
+    if let Some(key) = &self.assign {
       context.insert(key.to_owned(), json!(results));
     }
   }
 }
 
-async fn execute_postgres_query(
-  query: &str,
-  pool: &PgPool,
-) -> Vec<PgRow> {
+async fn execute_postgres_query(query: &str, pool: &PgPool) -> Vec<PgRow> {
   pool.fetch_all(query).await.unwrap_or_else(|_| {
-    panic!(
-      "Query execution failed ({})",
-      query.split_at(10).0
-    )
+    panic!("Query execution failed ({})", query.split_at(10).0)
   })
 }
 
@@ -108,17 +96,13 @@ pub enum QueryResults {
 }
 
 impl Serialize for QueryResults {
-  fn serialize<S>(
-    &self,
-    serializer: S,
-  ) -> Result<S::Ok, S::Error>
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
   where
     S: serde::Serializer,
   {
     match self {
       QueryResults::Postgres(v) => {
-        let mut seq =
-          serializer.serialize_seq(Some(v.len()))?;
+        let mut seq = serializer.serialize_seq(Some(v.len()))?;
         for e in v {
           seq.serialize_element(&PostgresRow(e))?;
         }
@@ -131,16 +115,12 @@ impl Serialize for QueryResults {
 struct PostgresRow<'a>(&'a PgRow);
 
 impl<'a> Serialize for PostgresRow<'a> {
-  fn serialize<S>(
-    &self,
-    serializer: S,
-  ) -> Result<S::Ok, S::Error>
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
   where
     S: serde::Serializer,
   {
     let columns_len = self.0.columns().len();
-    let mut map =
-      serializer.serialize_map(Some(columns_len))?;
+    let mut map = serializer.serialize_map(Some(columns_len))?;
     for col in 0..columns_len {
       let key = self.0.column(col).name();
       let val = self
@@ -153,9 +133,7 @@ impl<'a> Serialize for PostgresRow<'a> {
             val.as_str().unwrap()
           }
         })
-        .unwrap_or_else(|_| {
-          panic!("Failed to get value from column {}", col)
-        });
+        .unwrap_or_else(|_| panic!("Failed to get value from column {}", col));
       map.serialize_entry(key, val)?;
     }
     map.end()

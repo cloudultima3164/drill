@@ -1,7 +1,6 @@
 ---
-# Set custom .env path. Default is to search
-# in the current folder
-env: <SET YOUR OWN REPO PATH>/drill/test/example_db/.env
+# Set custom .env path.
+env: <SET PATH>
 database:
   example_db0:
     # Specify each parameter separately; the app will build the connection string

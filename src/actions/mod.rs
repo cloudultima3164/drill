@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use serde::Deserialize;
-use yaml_rust::Yaml;
 
 mod assert;
 mod assign;
@@ -46,13 +45,9 @@ pub enum WithOps {
 
 impl From<&str> for WithOps {
   fn from(value: &str) -> Self {
-    serde_json::from_value(serde_json::Value::String(
-      value.to_owned(),
-    ))
-    .map_err(|_| {
-      format!("Unknown 'with' attribute, {value}")
-    })
-    .unwrap()
+    serde_json::from_value(serde_json::Value::String(value.to_owned()))
+      .map_err(|_| format!("Unknown 'with' attribute, {value}"))
+      .unwrap()
   }
 }
 
@@ -65,11 +60,7 @@ pub struct Report {
 
 impl fmt::Debug for Report {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(
-      f,
-      "\n- name: {}\n  duration: {}\n",
-      self.name, self.duration
-    )
+    write!(f, "\n- name: {}\n  duration: {}\n", self.name, self.duration)
   }
 }
 
@@ -80,36 +71,5 @@ impl fmt::Display for Report {
       "\n- name: {}\n  duration: {}\n  status: {}\n",
       self.name, self.duration, self.status
     )
-  }
-}
-
-pub fn extract_optional<'a>(
-  item: &'a Yaml,
-  attr: &'a str,
-) -> Option<String> {
-  if let Some(s) = item[attr].as_str() {
-    Some(s.to_string())
-  } else if item[attr].as_hash().is_some() {
-    panic!(
-      "`{}` needs to be a string. Try adding quotes",
-      attr
-    );
-  } else {
-    None
-  }
-}
-
-pub fn extract<'a>(
-  item: &'a Yaml,
-  attr: &'a str,
-) -> String {
-  if let Some(s) = item[attr].as_i64() {
-    s.to_string()
-  } else if let Some(s) = item[attr].as_str() {
-    s.to_string()
-  } else if item[attr].as_hash().is_some() {
-    panic!("`{}` is required needs to be a string. Try adding quotes", attr);
-  } else {
-    panic!("Unknown node `{}` => {:?}", attr, item[attr]);
   }
 }

@@ -12,7 +12,8 @@ plan:
       base: jisho
       url: words?keyword={{ keyword }}
       with_items:
-        - { keyword: 食 }
+        items:
+          - { keyword: 食 }
   - name: Echo result
     assign: echo_result
     request:

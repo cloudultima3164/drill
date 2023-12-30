@@ -1,37 +1,23 @@
-use std::fs::File;
-use std::io::prelude::*;
-use std::path::Path;
-
 use colored::*;
-use yaml_rust::YamlLoader;
 
 use crate::actions::Report;
+use crate::reader::get_file;
 
-pub fn compare(list_reports: &[Vec<Report>], filepath: &str, threshold: &str) -> Result<(), i32> {
+pub fn compare(
+  list_reports: &[Vec<Report>],
+  filepath: &str,
+  threshold: &str,
+) -> Result<(), i32> {
   let threshold_value = match threshold.parse::<f64>() {
     Ok(v) => v,
     _ => panic!("arrrgh"),
   };
 
-  // Create a path to the desired file
-  let path = Path::new(filepath);
-  let display = path.display();
+  let file = get_file(filepath);
 
-  // Open the path in read-only mode, returns `io::Result<File>`
-  let mut file = match File::open(path) {
-    Err(why) => panic!("couldn't open {}: {}", display, why),
-    Ok(file) => file,
-  };
-
-  // Read the file contents into a string, returns `io::Result<usize>`
-  let mut content = String::new();
-  if let Err(why) = file.read_to_string(&mut content) {
-    panic!("couldn't read {}: {}", display, why);
-  }
-
-  let docs = YamlLoader::load_from_str(content.as_str()).unwrap();
+  let docs: Vec<serde_yaml::Value> = serde_yaml::from_reader(file).unwrap();
   let doc = &docs[0];
-  let items = doc.as_vec().unwrap();
+  let items = doc.as_sequence().unwrap();
   let mut slow_counter = 0;
 
   println!();
@@ -42,7 +28,13 @@ pub fn compare(list_reports: &[Vec<Report>], filepath: &str, threshold: &str) ->
       let delta_ms = report_item.duration - recorded_duration;
 
       if delta_ms > threshold_value {
-        println!("{:width$} is {}{} slower than before", report_item.name.green(), delta_ms.round().to_string().red(), "ms".red(), width = 25);
+        println!(
+          "{:width$} is {}{} slower than before",
+          report_item.name.green(),
+          delta_ms.round().to_string().red(),
+          "ms".red(),
+          width = 25
+        );
 
         slow_counter += 1;
       }

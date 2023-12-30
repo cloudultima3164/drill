@@ -2,9 +2,7 @@ use async_trait::async_trait;
 use colored::*;
 use serde_json::json;
 use std::process::Command;
-use yaml_rust::Yaml;
 
-use crate::actions::extract;
 use crate::actions::Runnable;
 use crate::benchmark::{Context, Pool, Reports};
 use crate::config::Config;
@@ -18,14 +16,8 @@ pub struct Exec {
 }
 
 impl Exec {
-  pub fn new(
-    name: String,
-    assign: Option<String>,
-    item: &Yaml,
-  ) -> Exec {
-    let command = extract(item, "command");
-
-    Exec {
+  pub fn new(name: String, assign: Option<String>, command: String) -> Self {
+    Self {
       name,
       command,
       assign,
@@ -52,21 +44,17 @@ impl Runnable for Exec {
     }
 
     let final_command =
-      interpolator::Interpolator::new(context)
-        .resolve(&self.command);
+      interpolator::Interpolator::new(context).resolve(&self.command);
 
     let args = ["bash", "-c", "--", final_command.as_str()];
 
-    let execution = Command::new(args[0])
-      .args(&args[1..])
-      .output()
-      .expect("Couldn't run it");
+    let execution =
+      Command::new(args[0]).args(&args[1..]).output().expect("Couldn't run it");
 
-    let output: String =
-      String::from_utf8_lossy(&execution.stdout).into();
-    let output = output.trim_end().to_string();
+    let output = String::from_utf8_lossy(&execution.stdout);
+    let output = output.trim_end();
 
-    if let Some(ref key) = self.assign {
+    if let Some(key) = &self.assign {
       context.insert(key.to_owned(), json!(output));
     }
   }

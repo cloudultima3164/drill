@@ -1,9 +1,6 @@
 use async_trait::async_trait;
 use colored::*;
-use serde_json::json;
-use yaml_rust::Yaml;
 
-use crate::actions::extract;
 use crate::actions::Runnable;
 use crate::benchmark::{Context, Pool, Reports};
 use crate::config::Config;
@@ -12,15 +9,12 @@ use crate::config::Config;
 pub struct Assign {
   name: String,
   key: String,
-  value: String,
+  value: serde_json::Value,
 }
 
 impl Assign {
-  pub fn new(name: String, item: &Yaml) -> Assign {
-    let key = extract(item, "key");
-    let value = extract(item, "value");
-
-    Assign {
+  pub fn new(name: String, key: String, value: serde_json::Value) -> Self {
+    Self {
       name,
       key,
       value,
@@ -42,14 +36,11 @@ impl Runnable for Assign {
         "{:width$} {}={}",
         self.name.green(),
         self.key.cyan().bold(),
-        self.value.magenta(),
+        serde_json::to_string(&self.value).unwrap().magenta(),
         width = 25
       );
     }
 
-    context.insert(
-      self.key.to_owned(),
-      json!(self.value.to_owned()),
-    );
+    context.insert(self.key.to_owned(), self.value.to_owned());
   }
 }
