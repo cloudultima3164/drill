@@ -240,7 +240,7 @@ where
 
   let cwd = current_dir().unwrap();
   // Need to calculate and set directory in case we are using relative paths that point to another directory
-  let new_directory = if path.starts_with('.') {
+  if path.starts_with('.') {
     let mut new_dir = cwd.clone();
     new_dir.extend(PathBuf::from(&path).parent().unwrap());
     let mut new_path = new_dir.clone();
@@ -253,12 +253,9 @@ where
       .to_string_lossy()
       .to_string();
 
-    new_dir
-  } else {
-    PathBuf::from(&path).parent().unwrap().to_path_buf()
+    set_current_dir(new_dir).unwrap();
   };
 
-  set_current_dir(new_directory).unwrap();
   let doc = include_doc(&path);
   // Reset current directory so we can still use relative paths in successive include items after recursing down
   set_current_dir(cwd).unwrap();
