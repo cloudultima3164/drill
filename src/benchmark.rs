@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::env::{current_dir, set_current_dir};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -121,6 +123,10 @@ fn join<S: ToString>(l: Vec<S>, sep: &str) -> String {
 }
 
 pub fn execute(args: &FlattenedCli) -> BenchmarkResult {
+  let original_dir = current_dir();
+  set_current_dir(PathBuf::from(&args.benchmark_file).parent().unwrap())
+    .unwrap();
+
   let benchmark_doc: BenchmarkDoc =
     serde_yaml::from_value(read_file_as_yml(&args.benchmark_file)).unwrap();
 
@@ -179,7 +185,7 @@ pub fn execute(args: &FlattenedCli) -> BenchmarkResult {
     .build()
     .unwrap();
 
-  rt.block_on(async {
+  let result = rt.block_on(async {
     if let Some(ref report_path) = args.report_path_option {
       let reports =
         run_iteration(benchmark.clone(), pool.clone(), config, 0).await;
@@ -212,5 +218,9 @@ pub fn execute(args: &FlattenedCli) -> BenchmarkResult {
         duration,
       }
     }
-  })
+  });
+  original_dir.and_then(set_current_dir).unwrap_or_else(|err| {
+    eprintln!("Couldn't reset working directory: {}", err)
+  });
+  result
 }

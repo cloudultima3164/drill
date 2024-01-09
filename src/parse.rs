@@ -1,11 +1,13 @@
 use std::{
   collections::{BTreeMap, HashMap},
+  env::{current_dir, set_current_dir},
   fs::File,
   io::Read,
   path::PathBuf,
   str::FromStr,
 };
 
+use path_absolutize::Absolutize;
 use serde::{Deserialize, Deserializer};
 
 use crate::{
@@ -234,8 +236,32 @@ fn include_doc_deser<'de, D>(de: D) -> Result<IncludeDoc, D::Error>
 where
   D: Deserializer<'de>,
 {
-  let path: String = Deserialize::deserialize(de)?;
+  let mut path: String = Deserialize::deserialize(de)?;
+
+  let cwd = current_dir().unwrap();
+  // Need to calculate and set directory in case we are using relative paths that point to another directory
+  let new_directory = if path.starts_with('.') {
+    let mut new_dir = cwd.clone();
+    new_dir.extend(PathBuf::from(&path).parent().unwrap());
+    let mut new_path = new_dir.clone();
+    new_path.push(PathBuf::from(&path).components().next_back().unwrap());
+    // If working with relative paths, we need to fix the include file path.
+    // We will try to read a file relative to the parent directory of the
+    // newly set directory if we don't change anything
+    path = pathdiff::diff_paths(new_path, &new_dir)
+      .unwrap()
+      .to_string_lossy()
+      .to_string();
+
+    new_dir
+  } else {
+    PathBuf::from(&path).parent().unwrap().to_path_buf()
+  };
+
+  set_current_dir(new_directory).unwrap();
   let doc = include_doc(&path);
+  // Reset current directory so we can still use relative paths in successive include items after recursing down
+  set_current_dir(cwd).unwrap();
   Ok(IncludeDoc {
     path,
     doc,
@@ -251,7 +277,7 @@ where
   D: Deserializer<'de>,
 {
   let path: String = Deserialize::deserialize(de)?;
-  let env_file = PathBuf::from(&path);
+  let env_file = PathBuf::from(path).absolutize().unwrap().to_path_buf();
   let env = if let Ok(true) = env_file.try_exists() {
     let mut buffer = String::new();
     if let Ok(mut file) = File::open(env_file) {
