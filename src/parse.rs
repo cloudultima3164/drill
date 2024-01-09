@@ -36,10 +36,11 @@ pub struct BenchmarkDoc {
   pub concurrency: usize,
   #[serde(deserialize_with = "get_databases", flatten)]
   pub databases: BTreeMap<String, YamlDbDefinition>,
-  #[serde(default = "BTreeMap::new")]
+  #[serde(default = "Default::default")]
   pub urls: BTreeMap<String, String>,
-  #[serde(default = "BTreeMap::new")]
+  #[serde(default = "Default::default")]
   pub global: BTreeMap<String, String>,
+  #[serde(default = "Default::default")]
   pub plan: Vec<PlanItem>,
 }
 
