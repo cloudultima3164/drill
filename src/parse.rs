@@ -45,7 +45,8 @@ pub struct BenchmarkDoc {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct PlanItem {
-  pub name: String,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub name: Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub assign: Option<String>,
   #[serde(flatten)]
@@ -91,7 +92,7 @@ pub enum Action {
     with_items: Option<WithItems>,
   },
   #[serde(deserialize_with = "include_doc_deser")]
-  Include(BenchmarkDoc),
+  Include(IncludeDoc),
 }
 
 #[derive(Debug, Clone)]
@@ -222,12 +223,22 @@ impl Pick {
   }
 }
 
-fn include_doc_deser<'de, D>(de: D) -> Result<BenchmarkDoc, D::Error>
+#[derive(Debug, Clone)]
+pub struct IncludeDoc {
+  pub path: String,
+  pub doc: BenchmarkDoc,
+}
+
+fn include_doc_deser<'de, D>(de: D) -> Result<IncludeDoc, D::Error>
 where
   D: Deserializer<'de>,
 {
   let path: String = Deserialize::deserialize(de)?;
-  Ok(include_doc(&path))
+  let doc = include_doc(&path);
+  Ok(IncludeDoc {
+    path,
+    doc,
+  })
 }
 
 pub fn include_doc(path: &str) -> BenchmarkDoc {

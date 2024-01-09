@@ -28,50 +28,58 @@ pub type Reports = Vec<Report>;
 pub type PoolStore = HashMap<String, Client>;
 pub type Pool = Arc<Mutex<PoolStore>>;
 
-impl<'a> From<&'a BenchmarkDoc> for Benchmark {
+impl<'a> From<&'a BenchmarkDoc> for (Config, Benchmark) {
   fn from(doc: &'a BenchmarkDoc) -> Self {
-    doc
-      .plan
-      .iter()
-      .map(|plan| {
-        let name = plan.name.clone();
-        let assign = plan.assign.clone();
-        match plan.action.clone() {
-          crate::parse::Action::Assert {
-            key,
-            value,
-          } => Box::new(Assert::new(name, key, value)) as Runner,
-          crate::parse::Action::Assign {
-            key,
-            value,
-          } => Box::new(Assign::new(name, key, value)) as Runner,
-          crate::parse::Action::DbQuery {
-            target,
-            query,
-            with_items,
-          } => Box::new(DbQuery::new(name, assign, target, query, with_items))
-            as Runner,
-          crate::parse::Action::Delay {
-            seconds,
-          } => Box::new(Delay::new(name, seconds)) as Runner,
-          crate::parse::Action::Exec {
-            command,
-          } => Box::new(Exec::new(name, assign, command)) as Runner,
-          crate::parse::Action::Request {
-            base,
-            url,
-            time,
-            method,
-            headers,
-            body,
-            with_items,
-          } => Box::new(Request::new(
-            name, base, url, time, method, headers, body, with_items, assign,
-          )),
-          crate::parse::Action::Include(_) => todo!(),
+    let mut config = Config::from(doc);
+    let mut benchmark = Benchmark::new();
+
+    for plan in &doc.plan {
+      let name = plan.name.clone().unwrap_or_default();
+      let assign = plan.assign.clone();
+      match plan.action.clone() {
+        crate::parse::Action::Assert {
+          key,
+          value,
+        } => benchmark.push(Box::new(Assert::new(name, key, value)) as Runner),
+        crate::parse::Action::Assign {
+          key,
+          value,
+        } => benchmark.push(Box::new(Assign::new(name, key, value)) as Runner),
+        crate::parse::Action::DbQuery {
+          target,
+          query,
+          with_items,
+        } => benchmark.push(Box::new(DbQuery::new(
+          name, assign, target, query, with_items,
+        )) as Runner),
+        crate::parse::Action::Delay {
+          seconds,
+        } => benchmark.push(Box::new(Delay::new(name, seconds)) as Runner),
+        crate::parse::Action::Exec {
+          command,
+        } => {
+          benchmark.push(Box::new(Exec::new(name, assign, command)) as Runner)
         }
-      })
-      .collect()
+        crate::parse::Action::Request {
+          base,
+          url,
+          time,
+          method,
+          headers,
+          body,
+          with_items,
+        } => benchmark.push(Box::new(Request::new(
+          name, base, url, time, method, headers, body, with_items, assign,
+        ))),
+        crate::parse::Action::Include(doc) => {
+          let (include_config, include_benchmark) = Self::from(&doc.doc);
+          config.merge_config(include_config);
+          benchmark.extend(include_benchmark);
+        }
+      }
+    }
+
+    (config, benchmark)
   }
 }
 
@@ -113,11 +121,21 @@ fn join<S: ToString>(l: Vec<S>, sep: &str) -> String {
 }
 
 pub fn execute(args: &FlattenedCli) -> BenchmarkResult {
-  // let config = Arc::new(Config::new(args));
-
   let benchmark_doc: BenchmarkDoc =
     serde_yaml::from_value(read_file_as_yml(&args.benchmark_file)).unwrap();
-  let config = Arc::new(Config::from(&benchmark_doc).with_args(args));
+
+  let (config, benchmark): (Config, Benchmark) = From::from(&benchmark_doc);
+  let config = Arc::new(config.with_args(args));
+
+  if benchmark.is_empty() {
+    eprintln!("Empty benchmark. Exiting.");
+    std::process::exit(1);
+  }
+
+  let benchmark = Arc::new(benchmark);
+
+  let pool_store: PoolStore = PoolStore::new();
+  let pool = Arc::new(Mutex::new(pool_store));
 
   if args.verbose {
     if args.report_path_option.is_some() {
@@ -162,17 +180,6 @@ pub fn execute(args: &FlattenedCli) -> BenchmarkResult {
     .unwrap();
 
   rt.block_on(async {
-    let benchmark: Benchmark = Benchmark::from(&benchmark_doc);
-    let pool_store: PoolStore = PoolStore::new();
-
-    if benchmark.is_empty() {
-      eprintln!("Empty benchmark. Exiting.");
-      std::process::exit(1);
-    }
-
-    let benchmark = Arc::new(benchmark);
-    let pool = Arc::new(Mutex::new(pool_store));
-
     if let Some(ref report_path) = args.report_path_option {
       let reports =
         run_iteration(benchmark.clone(), pool.clone(), config, 0).await;
