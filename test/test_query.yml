@@ -1,7 +1,7 @@
 ---
 # Set custom .env path.
 env: <SET PATH>
-database:
+databases:
   example_db0:
     # Specify each parameter separately; the app will build the connection string
     type: postgres

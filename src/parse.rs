@@ -35,7 +35,7 @@ pub struct BenchmarkDoc {
   #[serde(default = "num_cpus::get")]
   pub concurrency: usize,
   #[serde(deserialize_with = "get_databases", flatten)]
-  pub database: BTreeMap<String, YamlDbDefinition>,
+  pub databases: BTreeMap<String, YamlDbDefinition>,
   #[serde(default = "BTreeMap::new")]
   pub urls: BTreeMap<String, String>,
   #[serde(default = "BTreeMap::new")]

@@ -33,7 +33,7 @@ impl From<&BenchmarkDoc> for Config {
         global
       },
       dbs: doc
-        .database
+        .databases
         .clone()
         .into_iter()
         .map(|(k, v)| (k, DbDefinition::from(v)))
