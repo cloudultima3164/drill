@@ -1,9 +1,0 @@
----
-global:
-  one: "1"
-
-plan:
-  - name: Assert result
-    assert:
-      key: one
-      value: "1"

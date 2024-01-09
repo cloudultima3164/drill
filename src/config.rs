@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 // const NRAMPUP: i64 = 0;
 const TIMEOUT: u64 = 30;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Config {
   pub urls: BTreeMap<String, String>,
   pub global: BTreeMap<String, String>,
@@ -61,5 +61,11 @@ impl Config {
     self.relaxed_interpolations = args.relaxed_interpolations;
     self.no_check_certificate = args.no_check_certificate;
     self
+  }
+
+  pub fn merge_config(&mut self, other: Self) {
+    self.urls.extend(other.urls);
+    self.dbs.extend(other.dbs);
+    self.global.extend(other.global);
   }
 }
