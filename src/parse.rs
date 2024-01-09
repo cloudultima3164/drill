@@ -1,13 +1,11 @@
 use std::{
   collections::{BTreeMap, HashMap},
-  env::{current_dir, set_current_dir},
   fs::File,
   io::Read,
   path::PathBuf,
   str::FromStr,
 };
 
-use path_absolutize::Absolutize;
 use serde::{Deserialize, Deserializer};
 
 use crate::{
@@ -38,18 +36,16 @@ pub struct BenchmarkDoc {
   pub concurrency: usize,
   #[serde(deserialize_with = "get_databases", flatten)]
   pub databases: BTreeMap<String, YamlDbDefinition>,
-  #[serde(default = "Default::default")]
+  #[serde(default = "BTreeMap::new")]
   pub urls: BTreeMap<String, String>,
-  #[serde(default = "Default::default")]
+  #[serde(default = "BTreeMap::new")]
   pub global: BTreeMap<String, String>,
-  #[serde(default = "Default::default")]
   pub plan: Vec<PlanItem>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct PlanItem {
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub name: Option<String>,
+  pub name: String,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub assign: Option<String>,
   #[serde(flatten)]
@@ -95,7 +91,7 @@ pub enum Action {
     with_items: Option<WithItems>,
   },
   #[serde(deserialize_with = "include_doc_deser")]
-  Include(IncludeDoc),
+  Include(BenchmarkDoc),
 }
 
 #[derive(Debug, Clone)]
@@ -226,43 +222,12 @@ impl Pick {
   }
 }
 
-#[derive(Debug, Clone)]
-pub struct IncludeDoc {
-  pub path: String,
-  pub doc: BenchmarkDoc,
-}
-
-fn include_doc_deser<'de, D>(de: D) -> Result<IncludeDoc, D::Error>
+fn include_doc_deser<'de, D>(de: D) -> Result<BenchmarkDoc, D::Error>
 where
   D: Deserializer<'de>,
 {
-  let mut path: String = Deserialize::deserialize(de)?;
-
-  let cwd = current_dir().unwrap();
-  // Need to calculate and set directory in case we are using relative paths that point to another directory
-  if path.starts_with('.') {
-    let mut new_dir = cwd.clone();
-    new_dir.extend(PathBuf::from(&path).parent().unwrap());
-    let mut new_path = new_dir.clone();
-    new_path.push(PathBuf::from(&path).components().next_back().unwrap());
-    // If working with relative paths, we need to fix the include file path.
-    // We will try to read a file relative to the parent directory of the
-    // newly set directory if we don't change anything
-    path = pathdiff::diff_paths(new_path, &new_dir)
-      .unwrap()
-      .to_string_lossy()
-      .to_string();
-
-    set_current_dir(new_dir).unwrap();
-  };
-
-  let doc = include_doc(&path);
-  // Reset current directory so we can still use relative paths in successive include items after recursing down
-  set_current_dir(cwd).unwrap();
-  Ok(IncludeDoc {
-    path,
-    doc,
-  })
+  let path: String = Deserialize::deserialize(de)?;
+  Ok(include_doc(&path))
 }
 
 pub fn include_doc(path: &str) -> BenchmarkDoc {
@@ -274,7 +239,7 @@ where
   D: Deserializer<'de>,
 {
   let path: String = Deserialize::deserialize(de)?;
-  let env_file = PathBuf::from(path).absolutize().unwrap().to_path_buf();
+  let env_file = PathBuf::from(&path);
   let env = if let Ok(true) = env_file.try_exists() {
     let mut buffer = String::new();
     if let Ok(mut file) = File::open(env_file) {

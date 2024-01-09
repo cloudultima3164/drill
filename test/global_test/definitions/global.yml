@@ -1,5 +1,0 @@
----
-global:
-  one: 1
-plan:
-  - include: "./two.yml"
