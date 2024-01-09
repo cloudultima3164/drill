@@ -3,17 +3,15 @@ use std::fs::File;
 use std::io::{prelude::*, BufReader};
 use std::path::Path;
 
-use path_absolutize::Absolutize;
-
 pub fn get_file<S: AsRef<OsStr> + ?Sized>(filepath: &S) -> File {
   // Create a path to the desired file
-
-  let path = Path::new(filepath).absolutize().unwrap();
+  let path = Path::new(filepath);
+  let display = path.display();
 
   // Open the path in read-only mode, returns `io::Result<File>`
-  match File::open(&path) {
+  match File::open(path) {
     Err(why) => {
-      panic!("couldn't open {}: {}", path.to_string_lossy(), why)
+      panic!("couldn't open {}: {}", display, why)
     }
     Ok(file) => file,
   }
