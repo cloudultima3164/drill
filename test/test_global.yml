@@ -1,7 +1,0 @@
----
-plan:
-  - include: "/Users/ak_lo/programming/rust/drill/test/global_definition.yml"
-  - name: Assert result
-    assert:
-      key: one
-      value: 1

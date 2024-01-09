@@ -1,0 +1,6 @@
+---
+global:
+  two: 2
+
+plan:
+  - include: "../three.yml"
